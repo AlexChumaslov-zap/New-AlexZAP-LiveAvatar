@@ -1,0 +1,46 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - iframe [ref=e5]:
+      - banner [ref=f2e2]:
+        - generic [ref=f2e3]:
+          - generic [ref=f2e5]:
+            - heading [level=1]
+          - generic [ref=f2e6]:
+            - generic [ref=f2e8]:
+              - link "Gmail" [ref=f2e10] [cursor=pointer]:
+                - /url: https://mail.google.com/mail/?tab=rm&ogbl
+              - link "Search for Images" [ref=f2e12] [cursor=pointer]:
+                - /url: https://www.google.com/imghp?hl=en&tab=ri&ogbl
+                - text: Images
+            - button "Google apps" [ref=f2e17] [cursor=pointer]:
+              - img [ref=f2e18]
+    - generic [ref=e12]:
+      - combobox "Search Google or type a URL" [ref=e13]
+      - generic:
+        - button "Search by voice" [ref=e15] [cursor=pointer]
+        - button "Search by image" [ref=e17] [cursor=pointer]
+      - button "AI Mode" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - generic [ref=e22]:
+          - generic: AI Mode
+    - generic [ref=e24]:
+      - generic "LiveAvatar Sandbox Test" [ref=e25] [cursor=pointer]:
+        - link "LiveAvatar Sandbox Test" [ref=e26]:
+          - /url: http://localhost:5173/
+        - button "More actions for LiveAvatar Sandbox Test shortcut" [ref=e27]
+        - generic [ref=e32]: LiveAvatar Sandbox Test
+      - generic "Web Store" [ref=e33] [cursor=pointer]:
+        - link "Web Store" [ref=e34]:
+          - /url: https://chrome.google.com/webstore?hl=en
+        - button "More actions for Web Store shortcut" [ref=e35]
+        - generic [ref=e40]: Web Store
+      - button "Add shortcut" [ref=e41] [cursor=pointer]:
+        - generic [ref=e46]: Add shortcut
+      - generic:
+        - generic: Cancel
+        - generic: Done
+    - button "Customize Chrome" [ref=e49] [cursor=pointer]:
+      - generic [ref=e50]:
+        - img
+      - generic [ref=e52]: Customize Chrome
+  - img [ref=e54]

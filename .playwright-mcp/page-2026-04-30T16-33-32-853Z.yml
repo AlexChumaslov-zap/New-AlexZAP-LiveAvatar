@@ -1,0 +1,23 @@
+- generic [ref=e1]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: Live connection unavailable (Session concurrency limit reached) — using HeyGen hosted stream
+      - button "End Chat" [ref=e9] [cursor=pointer]
+    - iframe [ref=e11]:
+      - generic [active] [ref=f4e1]:
+        - img [ref=f4e2]
+        - generic [ref=f4e5]:
+          - generic:
+            - heading "Create talking avatar video online" [level=1]
+            - heading "All-in-one AI video generator" [level=2]
+          - generic [ref=f4e8]:
+            - generic:
+              - heading "Create talking avatar video online" [level=1]
+              - heading "All-in-one AI video generator" [level=2]
+            - generic [ref=f4e15]:
+              - img [ref=f4e16]
+              - generic [ref=f4e18]: Connecting...
+              - generic [ref=f4e19]: Loading up your avatar now for a realtime interactive experience.
+        - iframe [ref=f4e20]:
+          
+  - button "TEST PLAY" [active] [ref=e12] [cursor=pointer]

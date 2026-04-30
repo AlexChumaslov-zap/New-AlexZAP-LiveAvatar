@@ -1,0 +1,6 @@
+- generic [ref=e6]:
+  - generic [ref=e7]:
+    - generic [ref=e8]: Live connection unavailable (Session concurrency limit reached) — using HeyGen hosted stream
+    - button "End Chat" [ref=e9] [cursor=pointer]
+  - iframe [ref=e11]:
+    
