@@ -1,4 +1,4 @@
-// One-time script: creates a LiveAvatar context and writes its ID into .env.
+// One-time script: creates a LiveAvatar context and writes its ID into ./.env.
 // Run with: npm run setup:context
 
 import 'dotenv/config';
@@ -57,11 +57,11 @@ if (!contextId) {
 
 console.log(`Context created: ${contextId}`);
 
-const envPath = join(dirname(fileURLToPath(import.meta.url)), '.env');
+// scripts/setup-context.js → repo root /.env
+const envPath = join(dirname(fileURLToPath(import.meta.url)), '..', '.env');
 const envText = await readFile(envPath, 'utf8');
-const updated = envText.replace(
-  /^LIVEAVATAR_CONTEXT_ID=.*$/m,
-  `LIVEAVATAR_CONTEXT_ID=${contextId}`,
-);
+const updated = /^LIVEAVATAR_CONTEXT_ID=.*$/m.test(envText)
+  ? envText.replace(/^LIVEAVATAR_CONTEXT_ID=.*$/m, `LIVEAVATAR_CONTEXT_ID=${contextId}`)
+  : `${envText.replace(/\s*$/, '')}\nLIVEAVATAR_CONTEXT_ID=${contextId}\n`;
 await writeFile(envPath, updated);
-console.log('Wrote LIVEAVATAR_CONTEXT_ID to backend/.env');
+console.log('Wrote LIVEAVATAR_CONTEXT_ID to .env');

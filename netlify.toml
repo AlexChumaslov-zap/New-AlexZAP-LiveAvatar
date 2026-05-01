@@ -1,0 +1,17 @@
+[build]
+  command = "npm --prefix frontend ci && npm --prefix frontend run build"
+  publish = "frontend/dist"
+
+[functions]
+  directory    = "netlify/functions"
+  node_bundler = "esbuild"
+
+[dev]
+  command    = "npm --prefix frontend run dev"
+  targetPort = 5173
+  framework  = "vite"
+
+[[redirects]]
+  from   = "/api/session/token"
+  to     = "/.netlify/functions/session-token"
+  status = 200

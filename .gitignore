@@ -2,5 +2,8 @@ node_modules/
 dist/
 .env
 .env.local
+.netlify/
+.playwright-mcp/
+deno.lock
 .DS_Store
 *.log

@@ -19,7 +19,7 @@ function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
 
-function HeyGenFallback({ onExit, reason }) {
+function HeyGenFallback({ reason }) {
   const containerRef = useRef(null);
   useEffect(() => {
     const node = containerRef.current;
@@ -37,19 +37,12 @@ function HeyGenFallback({ onExit, reason }) {
   }, []);
   return (
     <div className="fixed inset-0 flex flex-col bg-black">
-      <div className="flex items-center justify-between gap-3 bg-amber-500/95 text-amber-950 text-sm font-medium px-4 py-2">
+      <div className="bg-amber-500/95 text-amber-950 text-sm font-medium px-4 py-2 text-center">
         <span className="truncate">
           {reason
             ? `Live connection unavailable (${reason}) — using HeyGen hosted stream`
             : 'Live connection unavailable — using HeyGen hosted stream'}
         </span>
-        <button
-          type="button"
-          onClick={onExit}
-          className="shrink-0 px-3 py-1 rounded-full bg-amber-950 text-amber-50 text-xs font-semibold hover:bg-amber-900 transition-colors"
-        >
-          End Chat
-        </button>
       </div>
       <div ref={containerRef} className="flex-1" />
     </div>
@@ -235,7 +228,7 @@ export default function App() {
   }
 
   if (useFallback) {
-    return <HeyGenFallback onExit={endChat} reason={error} />;
+    return <HeyGenFallback reason={error} />;
   }
 
   const isReady = status === 'ready';

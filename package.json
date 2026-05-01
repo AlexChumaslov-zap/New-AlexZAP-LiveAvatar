@@ -1,0 +1,14 @@
+{
+  "name": "liveavatar-sandbox-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "cd frontend && npm install && npm run build",
+    "setup:context": "node scripts/setup-context.js"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5"
+  }
+}
