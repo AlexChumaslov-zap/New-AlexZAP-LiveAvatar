@@ -49,6 +49,20 @@ If the LiveAvatar service is unavailable or you hit your account's session-concu
 
 Sandbox sessions are free and last about a minute. After that the avatar disconnects; click Talk again.
 
+## Testing the fallback
+
+Three ways to verify the fallback path works on staging or in dev:
+
+| Scenario | How | Effect |
+|---|---|---|
+| One visitor → fallback (no infra change) | Append `?forceFallback=1` to the URL | That tab skips the Talk button entirely and loads the HeyGen iframe immediately. Logged as `source: forced_url_flag`. |
+| All visitors → fallback (staging-wide) | Set `FORCE_API_DOWN=1` in Netlify env (or local `.env`), redeploy / restart `netlify dev` | Both `/api/session/token` and `/api/health` short-circuit. Frontend probe sees `down`, every Talk click goes to fallback. |
+| Real-network failure | DevTools → Network → Block request URL → `api.liveavatar.com`, click Talk | SDK rejects, fallback triggers within seconds. Logged as `source: sdk_error`. |
+
+Continuous monitoring runs in the background: the frontend polls `/api/health` every 30 seconds and pre-emptively switches to fallback if the LiveAvatar API stops responding. Once a visitor is in fallback, they stay there for the rest of the session — switchback only happens on the next visit / page reload, when the probe re-checks.
+
+Server-side incident logging: every fallback transition POSTs to `/api/log-event`, which logs a structured JSON record. View these in the Netlify dashboard → **Functions** tab → click the `log-event` function → Logs.
+
 ## How the auth split works
 
 | Endpoint                  | Where                            | Auth                               |

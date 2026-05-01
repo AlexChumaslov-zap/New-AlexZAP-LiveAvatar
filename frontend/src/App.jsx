@@ -10,6 +10,7 @@ import {
 
 const KEEP_ALIVE_MS = 2 * 60 * 1000;
 const CONNECT_TIMEOUT_MS = 22 * 1000;
+const HEALTH_PROBE_MS = 30 * 1000;
 
 const HEYGEN_FALLBACK_SHARE =
   'eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiI3NzJlN2EyNjU1MTA0ZjRjOGZhMDMwMDcz%0D%0AMzU5MDg4YiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0ALzc3MmU3YTI2NTUxMDRmNGM4ZmEwMzAwNzMzNTkwODhiL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImI0%0D%0ANzE2NDNmZTYzYzRiNmM4NzU5MjRmYWMxODFhNmYyIiwidXNlcm5hbWUiOiJmYjdiNjQ3MGI5Njg0%0D%0ANDJjOTgxZGM3OWUwNTQ1ZGQ5MyJ9';
@@ -82,6 +83,7 @@ export default function App() {
   const [textToSay, setTextToSay] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
+  const [apiHealthy, setApiHealthy] = useState('unknown'); // 'unknown' | 'ok' | 'down'
 
   function clearFallbackTimer() {
     if (fallbackTimerRef.current) {
@@ -90,14 +92,20 @@ export default function App() {
     }
   }
 
-  function triggerFallback() {
+  function triggerFallback(reason = null, source = 'sdk_error') {
     clearFallbackTimer();
     try {
       sessionRef.current?.stop().catch(() => {});
     } catch (err) {
       console.warn('session.stop() threw during fallback', err);
     }
+    if (reason) setError(reason);
     setUseFallback(true);
+    fetch('/api/log-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'fallback_triggered', reason, source }),
+    }).catch(() => {});
   }
 
   useEffect(() => {
@@ -119,14 +127,49 @@ export default function App() {
     };
   }, []);
 
+  // URL flag: ?forceFallback=1 → go straight to fallback iframe on page load (no Talk click needed)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('forceFallback')) {
+      triggerFallback(null, 'forced_url_flag');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Continuous health probe (30s). Pauses while in fallback.
+  useEffect(() => {
+    if (useFallback) return;
+    let cancelled = false;
+    async function probe() {
+      try {
+        const r = await fetch('/api/health');
+        const data = await r.json().catch(() => ({}));
+        if (!cancelled) setApiHealthy(data?.ok ? 'ok' : 'down');
+      } catch {
+        if (!cancelled) setApiHealthy('down');
+      }
+    }
+    probe();
+    const id = setInterval(probe, HEALTH_PROBE_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [useFallback]);
+
   async function connect() {
+    if (apiHealthy === 'down') {
+      triggerFallback('Health probe reports API is down', 'proactive_probe_failed');
+      return;
+    }
+
     setError(null);
     setUseFallback(false);
     setStatus('connecting');
 
     fallbackTimerRef.current = setTimeout(() => {
       console.warn(`Connect timeout after ${CONNECT_TIMEOUT_MS}ms — switching to fallback`);
-      triggerFallback();
+      triggerFallback(`Connect timeout after ${CONNECT_TIMEOUT_MS / 1000}s`, 'connect_timeout');
     }, CONNECT_TIMEOUT_MS);
 
     try {
@@ -147,8 +190,7 @@ export default function App() {
       await session.start();
     } catch (e) {
       console.error(e);
-      setError(e.message || String(e));
-      triggerFallback();
+      triggerFallback(e.message || String(e), 'sdk_error');
     }
   }
 

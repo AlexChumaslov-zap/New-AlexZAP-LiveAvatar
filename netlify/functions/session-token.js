@@ -4,7 +4,16 @@ export const handler = async () => {
     LIVEAVATAR_API_BASE = 'https://api.liveavatar.com',
     LIVEAVATAR_AVATAR_ID,
     LIVEAVATAR_CONTEXT_ID,
+    FORCE_API_DOWN,
   } = process.env;
+
+  if (FORCE_API_DOWN === '1') {
+    return {
+      statusCode: 503,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'forced_down' }),
+    };
+  }
 
   if (!LIVEAVATAR_API_KEY || !LIVEAVATAR_AVATAR_ID) {
     return {
