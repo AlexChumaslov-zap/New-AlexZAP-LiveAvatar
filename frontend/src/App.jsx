@@ -15,11 +15,6 @@ const HEALTH_PROBE_MS = 30 * 1000;
 const HEYGEN_FALLBACK_SHARE =
   'eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiI3NzJlN2EyNjU1MTA0ZjRjOGZhMDMwMDcz%0D%0AMzU5MDg4YiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0ALzc3MmU3YTI2NTUxMDRmNGM4ZmEwMzAwNzMzNTkwODhiL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImI0%0D%0ANzE2NDNmZTYzYzRiNmM4NzU5MjRmYWMxODFhNmYyIiwidXNlcm5hbWUiOiJmYjdiNjQ3MGI5Njg0%0D%0ANDJjOTgxZGM3OWUwNTQ1ZGQ5MyJ9';
 
-function isIOS() {
-  if (typeof navigator === 'undefined') return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-}
-
 function HeyGenFallback({ reason }) {
   const containerRef = useRef(null);
   useEffect(() => {
@@ -306,25 +301,23 @@ export default function App() {
 
       {!isReady && (
         <div className="start-bg absolute inset-0 overflow-hidden flex items-center justify-center">
-          {!isIOS() && (
-            <video
-              key={isMobile ? 'mob' : 'desk'}
-              ref={(el) => {
-                if (!el) return;
-                el.play().catch(() => {
-                  el.muted = true;
-                  el.play().catch(() => {});
-                });
-              }}
-              autoPlay
-              playsInline
-              preload="auto"
-              className="absolute inset-0 w-full h-full object-cover"
-              src={isMobile ? '/AZa-intro-mob.mp4' : '/AZa-intro.mp4'}
-            >
-              <track kind="captions" />
-            </video>
-          )}
+          <video
+            key={isMobile ? 'mob' : 'desk'}
+            ref={(el) => {
+              if (!el) return;
+              el.play().catch(() => {
+                el.muted = true;
+                el.play().catch(() => {});
+              });
+            }}
+            autoPlay
+            playsInline
+            preload="auto"
+            className="absolute inset-0 w-full h-full object-cover"
+            src={isMobile ? '/AZa-intro-mob.mp4' : '/AZa-intro.mp4'}
+          >
+            <track kind="captions" />
+          </video>
           <div className="relative z-10">
             <Spinner />
           </div>
