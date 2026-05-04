@@ -15,7 +15,7 @@ const HEALTH_PROBE_MS = 30 * 1000;
 const HEYGEN_FALLBACK_SHARE =
   'eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiI3NzJlN2EyNjU1MTA0ZjRjOGZhMDMwMDcz%0D%0AMzU5MDg4YiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0ALzc3MmU3YTI2NTUxMDRmNGM4ZmEwMzAwNzMzNTkwODhiL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImI0%0D%0ANzE2NDNmZTYzYzRiNmM4NzU5MjRmYWMxODFhNmYyIiwidXNlcm5hbWUiOiJmYjdiNjQ3MGI5Njg0%0D%0ANDJjOTgxZGM3OWUwNTQ1ZGQ5MyJ9';
 
-function HeyGenFallback({ reason }) {
+function HeyGenFallback() {
   const containerRef = useRef(null);
   useEffect(() => {
     const node = containerRef.current;
@@ -31,18 +31,7 @@ function HeyGenFallback({ reason }) {
       iframe.remove();
     };
   }, []);
-  return (
-    <div className="fixed inset-0 flex flex-col bg-black">
-      <div className="bg-amber-500/95 text-amber-950 text-sm font-medium px-4 py-2 text-center">
-        <span className="truncate">
-          {reason
-            ? `Live connection unavailable (${reason}) — using HeyGen hosted stream`
-            : 'Live connection unavailable — using HeyGen hosted stream'}
-        </span>
-      </div>
-      <div ref={containerRef} className="flex-1" />
-    </div>
-  );
+  return <div ref={containerRef} className="fixed inset-0 bg-black" />;
 }
 
 function Spinner() {
@@ -265,7 +254,7 @@ export default function App() {
   }
 
   if (useFallback) {
-    return <HeyGenFallback reason={error} />;
+    return <HeyGenFallback />;
   }
 
   const isReady = status === 'ready';
