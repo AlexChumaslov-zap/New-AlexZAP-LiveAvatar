@@ -273,7 +273,7 @@ export default function App() {
 
   if (showStartScreen) {
     return (
-      <div className="start-bg fixed inset-0 flex items-center justify-center">
+      <div className="start-bg fixed inset-0 flex items-center justify-center md:items-end md:pb-16">
         <div className="flex flex-col items-center gap-6 px-6">
           <button
             type="button"
