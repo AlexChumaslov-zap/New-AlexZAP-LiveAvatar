@@ -97,12 +97,15 @@ The API key never leaves the function. The frontend only sees a per-session toke
 | Session ends after ~1 minute               | Expected. Sandbox sessions are short.                               |
 | `netlify: command not found`               | Install with `npm i -g netlify-cli`                                 |
 
-## Going to production
+## Switching avatars (sandbox ↔ custom / production)
 
-When ready to leave sandbox:
+All avatar config is env-driven now — no code edits needed:
 
-1. Swap `LIVEAVATAR_AVATAR_ID` for your production avatar (`GET /v1/avatars` or dashboard).
-2. In `netlify/functions/session-token.js`, remove `is_sandbox: true` from the body.
-3. Image avatars require `voice_id` — add it to `avatar_persona` if your avatar isn't a video avatar.
+| Variable | Sandbox avatar | Custom / production avatar |
+|---|---|---|
+| `LIVEAVATAR_AVATAR_ID` | `dd73ea75-1218-4ef3-92ce-606d5f7fbc0a` (free sandbox) | Your avatar UUID from `GET /v1/avatars` or the dashboard |
+| `LIVEAVATAR_SANDBOX` | `true` | leave blank (or `false`) — sandbox mode rejects non-sandbox avatars |
+| `LIVEAVATAR_VOICE_ID` | leave blank | Required if your avatar is an **image** avatar; leave blank for video avatars |
+| `LIVEAVATAR_CONTEXT_ID` | created via `npm run setup:context` | Your knowledge-base UUID |
 
-That's it — same code, real avatar.
+After changing any of these on Netlify (Site settings → Environment variables), trigger a redeploy. Locally, restart `netlify dev`.

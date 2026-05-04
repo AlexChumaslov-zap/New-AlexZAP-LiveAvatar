@@ -4,6 +4,8 @@ export const handler = async () => {
     LIVEAVATAR_API_BASE = 'https://api.liveavatar.com',
     LIVEAVATAR_AVATAR_ID,
     LIVEAVATAR_CONTEXT_ID,
+    LIVEAVATAR_VOICE_ID,
+    LIVEAVATAR_SANDBOX,
     FORCE_API_DOWN,
   } = process.env;
 
@@ -23,6 +25,8 @@ export const handler = async () => {
     };
   }
 
+  const isSandbox = LIVEAVATAR_SANDBOX === 'true' || LIVEAVATAR_SANDBOX === '1';
+
   try {
     const r = await fetch(`${LIVEAVATAR_API_BASE}/v1/sessions/token`, {
       method: 'POST',
@@ -32,11 +36,13 @@ export const handler = async () => {
       },
       body: JSON.stringify({
         mode: 'FULL',
-        is_sandbox: true,
+        is_sandbox: isSandbox,
         avatar_id: LIVEAVATAR_AVATAR_ID,
+        interactivity_type: 'CONVERSATIONAL',
         avatar_persona: {
-          ...(LIVEAVATAR_CONTEXT_ID && { context_id: LIVEAVATAR_CONTEXT_ID }),
           language: 'en',
+          ...(LIVEAVATAR_VOICE_ID && { voice_id: LIVEAVATAR_VOICE_ID }),
+          ...(LIVEAVATAR_CONTEXT_ID && { context_id: LIVEAVATAR_CONTEXT_ID }),
         },
       }),
     });

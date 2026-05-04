@@ -11,6 +11,10 @@ import {
 const KEEP_ALIVE_MS = 2 * 60 * 1000;
 const CONNECT_TIMEOUT_MS = 22 * 1000;
 const HEALTH_PROBE_MS = 30 * 1000;
+// Hard cap on a single avatar session, even with constant dialogue.
+const MAX_SESSION_MS = 20 * 60 * 1000;
+// Auto-end the session if no user/avatar activity for this long.
+const IDLE_TIMEOUT_MS = 4 * 60 * 1000;
 
 const HEYGEN_FALLBACK_SHARE =
   'eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiI3NzJlN2EyNjU1MTA0ZjRjOGZhMDMwMDcz%0D%0AMzU5MDg4YiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0ALzc3MmU3YTI2NTUxMDRmNGM4ZmEwMzAwNzMzNTkwODhiL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImI0%0D%0ANzE2NDNmZTYzYzRiNmM4NzU5MjRmYWMxODFhNmYyIiwidXNlcm5hbWUiOiJmYjdiNjQ3MGI5Njg0%0D%0ANDJjOTgxZGM3OWUwNTQ1ZGQ5MyJ9';
@@ -57,6 +61,8 @@ export default function App() {
   const sessionRef = useRef(null);
   const keepAliveTimerRef = useRef(null);
   const fallbackTimerRef = useRef(null);
+  const maxDurationTimerRef = useRef(null);
+  const idleTimerRef = useRef(null);
 
   const [status, setStatus] = useState('idle'); // idle | connecting | ready | stopped | error
   const [error, setError] = useState(null);
@@ -76,8 +82,50 @@ export default function App() {
     }
   }
 
+  function clearSessionTimers() {
+    if (keepAliveTimerRef.current) {
+      clearInterval(keepAliveTimerRef.current);
+      keepAliveTimerRef.current = null;
+    }
+    if (maxDurationTimerRef.current) {
+      clearTimeout(maxDurationTimerRef.current);
+      maxDurationTimerRef.current = null;
+    }
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+  }
+
+  function endSessionDueToTimeout(reason) {
+    console.warn(`Auto-ending session: ${reason}`);
+    fetch('/api/log-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'session_auto_ended', reason, source: 'client_timer' }),
+    }).catch(() => {});
+    endChat();
+  }
+
+  function resetIdleTimer() {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(
+      () => endSessionDueToTimeout('idle_timeout'),
+      IDLE_TIMEOUT_MS,
+    );
+  }
+
+  function armMaxDurationTimer() {
+    if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
+    maxDurationTimerRef.current = setTimeout(
+      () => endSessionDueToTimeout('max_session_duration'),
+      MAX_SESSION_MS,
+    );
+  }
+
   function triggerFallback(reason = null, source = 'sdk_error') {
     clearFallbackTimer();
+    clearSessionTimers();
     try {
       sessionRef.current?.stop().catch(() => {});
     } catch (err) {
@@ -105,9 +153,29 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (keepAliveTimerRef.current) clearInterval(keepAliveTimerRef.current);
       clearFallbackTimer();
+      clearSessionTimers();
       sessionRef.current?.stop().catch(() => {});
+    };
+  }, []);
+
+  // Best-effort: stop the session if the user closes the tab / navigates away.
+  // Without this, sessions stay alive on HeyGen's side until their ~5 min cleanup,
+  // wasting account quota and contributing to the concurrency limit.
+  // pagehide fires reliably on iOS Safari (where beforeunload often doesn't).
+  useEffect(() => {
+    const stopOnUnload = () => {
+      try {
+        sessionRef.current?.stop();
+      } catch {
+        /* nothing we can do here */
+      }
+    };
+    window.addEventListener('beforeunload', stopOnUnload);
+    window.addEventListener('pagehide', stopOnUnload);
+    return () => {
+      window.removeEventListener('beforeunload', stopOnUnload);
+      window.removeEventListener('pagehide', stopOnUnload);
     };
   }, []);
 
@@ -188,6 +256,9 @@ export default function App() {
         session.keepAlive().catch((err) => console.warn('keepAlive failed', err));
       }, KEEP_ALIVE_MS);
 
+      armMaxDurationTimer();
+      resetIdleTimer();
+
       try {
         await session.voiceChat.start();
         await session.voiceChat.unmute();
@@ -198,18 +269,21 @@ export default function App() {
 
     session.on(SessionEvent.SESSION_STATE_CHANGED, (state) => {
       if (state === SessionState.DISCONNECTED) {
-        if (keepAliveTimerRef.current) {
-          clearInterval(keepAliveTimerRef.current);
-          keepAliveTimerRef.current = null;
-        }
+        clearSessionTimers();
         setStatus('stopped');
         setVoiceChatActive(false);
       }
     });
 
-    session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => setAvatarTalking(true));
+    session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
+      setAvatarTalking(true);
+      resetIdleTimer();
+    });
     session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => setAvatarTalking(false));
-    session.on(AgentEventsEnum.USER_SPEAK_STARTED, () => setUserTalking(true));
+    session.on(AgentEventsEnum.USER_SPEAK_STARTED, () => {
+      setUserTalking(true);
+      resetIdleTimer();
+    });
     session.on(AgentEventsEnum.USER_SPEAK_ENDED, () => setUserTalking(false));
 
     session.voiceChat.on(VoiceChatEvent.STATE_CHANGED, (s) => {
@@ -225,6 +299,7 @@ export default function App() {
     try {
       await sessionRef.current.message(text);
       setTextToSay('');
+      resetIdleTimer();
     } catch (e) {
       console.error(e);
       setError(e.message || String(e));
@@ -242,6 +317,7 @@ export default function App() {
 
   async function endChat() {
     clearFallbackTimer();
+    clearSessionTimers();
     try {
       await sessionRef.current?.stop();
     } catch (e) {
