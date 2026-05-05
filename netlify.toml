@@ -25,3 +25,23 @@
   from   = "/api/log-event"
   to     = "/.netlify/functions/log-event"
   status = 200
+
+# ──────────────────────────────────────────────────────────────────────────
+# Security headers (applied to every response)
+# ──────────────────────────────────────────────────────────────────────────
+# To allow embedding on additional domains (e.g. the corporate site), add them
+# to BOTH the Content-Security-Policy `frame-ancestors` directive below.
+# Example for production:
+#   Content-Security-Policy = "frame-ancestors 'self' https://zaptest.com https://*.zaptest.com;"
+# X-Frame-Options can only allow ONE specific origin (or SAMEORIGIN). Modern
+# browsers honor frame-ancestors over X-Frame-Options when both are present.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options    = "nosniff"
+    X-Frame-Options           = "SAMEORIGIN"
+    Referrer-Policy           = "strict-origin-when-cross-origin"
+    X-Robots-Tag              = "noindex, nofollow, noarchive, nosnippet, noimageindex"
+    Content-Security-Policy   = "frame-ancestors 'self';"
+    Permissions-Policy        = "microphone=*, camera=(), geolocation=(), payment=(), usb=()"
