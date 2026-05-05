@@ -29,19 +29,23 @@
 # ──────────────────────────────────────────────────────────────────────────
 # Security headers (applied to every response)
 # ──────────────────────────────────────────────────────────────────────────
-# To allow embedding on additional domains (e.g. the corporate site), add them
-# to BOTH the Content-Security-Policy `frame-ancestors` directive below.
-# Example for production:
-#   Content-Security-Policy = "frame-ancestors 'self' https://zaptest.com https://*.zaptest.com;"
-# X-Frame-Options can only allow ONE specific origin (or SAMEORIGIN). Modern
-# browsers honor frame-ancestors over X-Frame-Options when both are present.
+# `frame-ancestors` controls which origins are allowed to embed this site
+# in an iframe. We allow self (so the iframe-test page on the same Netlify
+# deploy keeps working) plus the production domain zaptest.ai and its subdomains.
+# To add another origin later, append it to the directive (e.g. another
+# allowed parent site). X-Frame-Options is intentionally NOT set: it can
+# only allow ONE specific origin, so it would conflict with the multi-origin
+# allow-list. Modern browsers all honor `frame-ancestors`.
+#
+# TEMPORARY: alexchumaslov-zap.github.io is included for QA testing on a
+# GitHub Pages page (the /iframe/ path). Remove this entry once that test
+# page is no longer needed.
 [[headers]]
   for = "/*"
   [headers.values]
     Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
     X-Content-Type-Options    = "nosniff"
-    X-Frame-Options           = "SAMEORIGIN"
     Referrer-Policy           = "strict-origin-when-cross-origin"
     X-Robots-Tag              = "noindex, nofollow, noarchive, nosnippet, noimageindex"
-    Content-Security-Policy   = "frame-ancestors 'self';"
+    Content-Security-Policy   = "frame-ancestors 'self' https://zaptest.ai https://*.zaptest.ai https://alexchumaslov-zap.github.io;"
     Permissions-Policy        = "microphone=*, camera=(), geolocation=(), payment=(), usb=()"
