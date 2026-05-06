@@ -21,6 +21,15 @@ let lastPrune = Date.now();
  * @returns {{ allowed: boolean, retryAfter?: number, remaining?: number }}
  */
 export function checkRateLimit(event, { windowMs, max, key }) {
+  // Bypass in local dev (`netlify dev` sets NETLIFY_DEV=true) and on explicit
+  // opt-out via RATE_LIMIT_DISABLED=1 (useful for QA/load-testing on staging).
+  if (
+    process.env.NETLIFY_DEV === 'true' ||
+    process.env.RATE_LIMIT_DISABLED === '1'
+  ) {
+    return { allowed: true, remaining: max };
+  }
+
   const ip = getClientIp(event);
   const bucketKey = `${key}:${ip}`;
   const now = Date.now();

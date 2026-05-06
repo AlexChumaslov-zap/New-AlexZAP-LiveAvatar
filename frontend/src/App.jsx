@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 import {
   LiveAvatarSession,
   SessionEvent,
@@ -84,6 +85,8 @@ export default function App() {
   const [apiHealthy, setApiHealthy] = useState("unknown"); // 'unknown' | 'ok' | 'down'
   const [endsInSeconds, setEndsInSeconds] = useState(null); // null | number — countdown shown during last 20s
   const [hasExtended, setHasExtended] = useState(false);
+  const [transcript, setTranscript] = useState([]); // [{ id, role, text, status, timestamp }]
+  const transcriptScrollRef = useRef(null);
 
   function clearFallbackTimer() {
     if (fallbackTimerRef.current) {
@@ -177,6 +180,59 @@ export default function App() {
     }).catch(() => {});
   }
 
+  // Transcript helpers. Streaming model: while a role is mid-utterance the SDK
+  // emits *_TRANSCRIPTION_CHUNK events with cumulative text; when the utterance
+  // completes a *_TRANSCRIPTION event arrives. We update the trailing partial
+  // entry of that role in place, then mark it complete.
+  function appendTranscriptChunk(role, text) {
+    setTranscript((t) => {
+      const last = t[t.length - 1];
+      if (last && last.role === role && last.status === "partial") {
+        return [...t.slice(0, -1), { ...last, text }];
+      }
+      return [
+        ...t,
+        {
+          id:
+            (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
+            `${Date.now()}-${Math.random()}`,
+          role,
+          text,
+          status: "partial",
+          timestamp: Date.now(),
+        },
+      ];
+    });
+  }
+
+  function finalizeTranscriptMessage(role, text) {
+    setTranscript((t) => {
+      const last = t[t.length - 1];
+      if (last && last.role === role && last.status === "partial") {
+        return [
+          ...t.slice(0, -1),
+          { ...last, text, status: "complete" },
+        ];
+      }
+      return [
+        ...t,
+        {
+          id:
+            (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
+            `${Date.now()}-${Math.random()}`,
+          role,
+          text,
+          status: "complete",
+          timestamp: Date.now(),
+        },
+      ];
+    });
+  }
+
+  function clearTranscript() {
+    setTranscript([]);
+  }
+
   function triggerFallback(reason = null, source = "sdk_error") {
     clearFallbackTimer();
     clearSessionTimers();
@@ -242,6 +298,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-scroll the transcript to the newest message on every update.
+  useEffect(() => {
+    const el = transcriptScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [transcript]);
+
   // Continuous health probe (30s). Pauses while in fallback.
   useEffect(() => {
     if (useFallback) return;
@@ -275,6 +337,7 @@ export default function App() {
     setError(null);
     setUseFallback(false);
     setStatus("connecting");
+    clearTranscript();
 
     fallbackTimerRef.current = setTimeout(() => {
       console.warn(
@@ -353,6 +416,19 @@ export default function App() {
     });
     session.on(AgentEventsEnum.USER_SPEAK_ENDED, () => setUserTalking(false));
 
+    session.on(AgentEventsEnum.USER_TRANSCRIPTION_CHUNK, (e) => {
+      appendTranscriptChunk("user", e.text);
+    });
+    session.on(AgentEventsEnum.USER_TRANSCRIPTION, (e) => {
+      finalizeTranscriptMessage("user", e.text);
+    });
+    session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION_CHUNK, (e) => {
+      appendTranscriptChunk("avatar", e.text);
+    });
+    session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION, (e) => {
+      finalizeTranscriptMessage("avatar", e.text);
+    });
+
     session.voiceChat.on(VoiceChatEvent.STATE_CHANGED, (s) => {
       setVoiceChatActive(s === VoiceChatState.ACTIVE);
     });
@@ -364,6 +440,8 @@ export default function App() {
     const text = textToSay.trim();
     if (!text || !sessionRef.current) return;
     try {
+      // Typed input doesn't emit USER_TRANSCRIPTION, so add it to the transcript directly.
+      finalizeTranscriptMessage("user", text);
       await sessionRef.current.message(text);
       setTextToSay("");
       resetIdleTimer();
@@ -395,6 +473,7 @@ export default function App() {
     setTextToSay("");
     setUseFallback(false);
     setHasExtended(false);
+    clearTranscript();
   }
 
   if (useFallback) {
@@ -499,6 +578,41 @@ export default function App() {
 
       {isReady && (
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+          <div className="mx-auto max-w-3xl mb-3">
+            <div
+              ref={transcriptScrollRef}
+              className="max-h-48 overflow-y-auto rounded-lg bg-black/50 backdrop-blur p-3 space-y-2"
+            >
+              {transcript.length === 0 ? (
+                <p className="text-white/50 text-sm text-center italic">
+                  Conversation will appear here…
+                </p>
+              ) : (
+                transcript.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={msg.role === "user" ? "text-right" : "text-left"}
+                  >
+                    <span
+                      className={`inline-block max-w-[85%] px-3 py-2 rounded-lg text-sm text-left ${
+                        msg.role === "user"
+                          ? "bg-red-600/80 text-white"
+                          : "bg-white/95 text-gray-900"
+                      } ${msg.status === "partial" ? "opacity-60" : ""}`}
+                    >
+                      {msg.role === "avatar" ? (
+                        <div className="[&_p]:my-0 [&_p:not(:last-child)]:mb-2 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+                          <Markdown>{msg.text}</Markdown>
+                        </div>
+                      ) : (
+                        msg.text
+                      )}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
           <div className="mx-auto max-w-3xl flex flex-wrap items-center gap-2">
             <input
               type="text"
