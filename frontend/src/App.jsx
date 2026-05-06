@@ -13,8 +13,14 @@ const CONNECT_TIMEOUT_MS = 22 * 1000;
 const HEALTH_PROBE_MS = 30 * 1000;
 // Hard cap on a single avatar session, even with constant dialogue.
 const MAX_SESSION_MS = 10 * 60 * 1000;
+
 // Auto-end the session if no user/avatar activity for this long.
 const IDLE_TIMEOUT_MS = 1 * 60 * 1000;
+// Optional extension granted when the user clicks "Continue session"
+// during the warning window. One-shot — only allowed once per session.
+const EXTENSION_MS = 5 * 60 * 1000;
+// Show the end-of-session warning banner this long before the cap fires.
+const WARNING_BEFORE_END_MS = 20 * 1000;
 
 const HEYGEN_FALLBACK_SHARE =
   "eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiI3NzJlN2EyNjU1MTA0ZjRjOGZhMDMwMDcz%0D%0AMzU5MDg4YiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0ALzc3MmU3YTI2NTUxMDRmNGM4ZmEwMzAwNzMzNTkwODhiL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImI0%0D%0ANzE2NDNmZTYzYzRiNmM4NzU5MjRmYWMxODFhNmYyIiwidXNlcm5hbWUiOiJmYjdiNjQ3MGI5Njg0%0D%0ANDJjOTgxZGM3OWUwNTQ1ZGQ5MyJ9";
@@ -63,6 +69,8 @@ export default function App() {
   const fallbackTimerRef = useRef(null);
   const maxDurationTimerRef = useRef(null);
   const idleTimerRef = useRef(null);
+  const warningTimerRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
 
   const [status, setStatus] = useState("idle"); // idle | connecting | ready | stopped | error
   const [error, setError] = useState(null);
@@ -74,12 +82,22 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const [apiHealthy, setApiHealthy] = useState("unknown"); // 'unknown' | 'ok' | 'down'
+  const [endsInSeconds, setEndsInSeconds] = useState(null); // null | number — countdown shown during last 20s
+  const [hasExtended, setHasExtended] = useState(false);
 
   function clearFallbackTimer() {
     if (fallbackTimerRef.current) {
       clearTimeout(fallbackTimerRef.current);
       fallbackTimerRef.current = null;
     }
+  }
+
+  function clearCountdown() {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setEndsInSeconds(null);
   }
 
   function clearSessionTimers() {
@@ -95,6 +113,11 @@ export default function App() {
       clearTimeout(idleTimerRef.current);
       idleTimerRef.current = null;
     }
+    if (warningTimerRef.current) {
+      clearTimeout(warningTimerRef.current);
+      warningTimerRef.current = null;
+    }
+    clearCountdown();
   }
 
   function endSessionDueToTimeout(reason) {
@@ -119,12 +142,39 @@ export default function App() {
     );
   }
 
-  function armMaxDurationTimer() {
+  function startEndCountdown() {
+    const startSeconds = Math.ceil(WARNING_BEFORE_END_MS / 1000);
+    setEndsInSeconds(startSeconds);
+    if (countdownIntervalRef.current)
+      clearInterval(countdownIntervalRef.current);
+    countdownIntervalRef.current = setInterval(() => {
+      setEndsInSeconds((s) => (s !== null && s > 1 ? s - 1 : 0));
+    }, 1000);
+  }
+
+  function armMaxDurationTimer(durationMs) {
     if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    warningTimerRef.current = setTimeout(
+      startEndCountdown,
+      Math.max(0, durationMs - WARNING_BEFORE_END_MS),
+    );
     maxDurationTimerRef.current = setTimeout(
       () => endSessionDueToTimeout("max_session_duration"),
-      MAX_SESSION_MS,
+      durationMs,
     );
+  }
+
+  function continueSession() {
+    if (hasExtended) return; // one-time extension only
+    setHasExtended(true);
+    clearCountdown();
+    armMaxDurationTimer(EXTENSION_MS);
+    fetch("/api/log-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "session_extended", source: "user" }),
+    }).catch(() => {});
   }
 
   function triggerFallback(reason = null, source = "sdk_error") {
@@ -270,7 +320,8 @@ export default function App() {
           .catch((err) => console.warn("keepAlive failed", err));
       }, KEEP_ALIVE_MS);
 
-      armMaxDurationTimer();
+      setHasExtended(false);
+      armMaxDurationTimer(MAX_SESSION_MS);
       resetIdleTimer();
 
       try {
@@ -343,6 +394,7 @@ export default function App() {
     setError(null);
     setTextToSay("");
     setUseFallback(false);
+    setHasExtended(false);
   }
 
   if (useFallback) {
@@ -422,6 +474,26 @@ export default function App() {
                 ? "you speaking"
                 : "live"}
           </span>
+        </div>
+      )}
+
+      {isReady && endsInSeconds !== null && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 w-full max-w-md pointer-events-none">
+          <div className="bg-gradient-to-tr from-red-600 to-red-950 text-white rounded-full shadow-xl px-5 py-3 flex items-center justify-between gap-3 pointer-events-auto transition-all duration-300">
+            <span className="text-sm font-semibold">
+              The session ends after {endsInSeconds} second
+              {endsInSeconds === 1 ? "" : "s"}
+            </span>
+            {!hasExtended && (
+              <button
+                type="button"
+                onClick={continueSession}
+                className="shrink-0 px-3 py-1.5 rounded-full bg-white text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors"
+              >
+                Continue session
+              </button>
+            )}
+          </div>
         </div>
       )}
 
