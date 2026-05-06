@@ -1,11 +1,20 @@
 // Lightweight health probe for the LiveAvatar API.
 // Frontend polls every ~30s to decide whether to attempt the SDK or pre-emptively show fallback.
 
+import { checkRateLimit, rateLimitedResponse } from '../lib/rateLimit.js';
+
 let cached = { result: null, ts: 0 };
 const TTL_MS = 30_000;
 const PROBE_TIMEOUT_MS = 3_000;
 
-export const handler = async () => {
+export const handler = async (event) => {
+  const rl = checkRateLimit(event, {
+    windowMs: 60 * 1000,
+    max: 30,
+    key: 'health',
+  });
+  if (!rl.allowed) return rateLimitedResponse(rl.retryAfter);
+
   if (process.env.FORCE_API_DOWN === '1') {
     return respond({ ok: false, reason: 'forced' });
   }

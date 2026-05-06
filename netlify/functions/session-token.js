@@ -1,4 +1,13 @@
-export const handler = async () => {
+import { checkRateLimit, rateLimitedResponse } from '../lib/rateLimit.js';
+
+export const handler = async (event) => {
+  const rl = checkRateLimit(event, {
+    windowMs: 5 * 60 * 1000,
+    max: 10,
+    key: 'session-token',
+  });
+  if (!rl.allowed) return rateLimitedResponse(rl.retryAfter);
+
   const {
     LIVEAVATAR_API_KEY,
     LIVEAVATAR_API_BASE = 'https://api.liveavatar.com',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 import {
   LiveAvatarSession,
   SessionEvent,
@@ -6,30 +6,30 @@ import {
   AgentEventsEnum,
   VoiceChatEvent,
   VoiceChatState,
-} from '@heygen/liveavatar-web-sdk';
+} from "@heygen/liveavatar-web-sdk";
 
 const KEEP_ALIVE_MS = 2 * 60 * 1000;
 const CONNECT_TIMEOUT_MS = 22 * 1000;
 const HEALTH_PROBE_MS = 30 * 1000;
 // Hard cap on a single avatar session, even with constant dialogue.
-const MAX_SESSION_MS = 20 * 60 * 1000;
+const MAX_SESSION_MS = 10 * 60 * 1000;
 // Auto-end the session if no user/avatar activity for this long.
-const IDLE_TIMEOUT_MS = 4 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 1 * 60 * 1000;
 
 const HEYGEN_FALLBACK_SHARE =
-  'eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiI3NzJlN2EyNjU1MTA0ZjRjOGZhMDMwMDcz%0D%0AMzU5MDg4YiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0ALzc3MmU3YTI2NTUxMDRmNGM4ZmEwMzAwNzMzNTkwODhiL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImI0%0D%0ANzE2NDNmZTYzYzRiNmM4NzU5MjRmYWMxODFhNmYyIiwidXNlcm5hbWUiOiJmYjdiNjQ3MGI5Njg0%0D%0ANDJjOTgxZGM3OWUwNTQ1ZGQ5MyJ9';
+  "eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiI3NzJlN2EyNjU1MTA0ZjRjOGZhMDMwMDcz%0D%0AMzU5MDg4YiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0ALzc3MmU3YTI2NTUxMDRmNGM4ZmEwMzAwNzMzNTkwODhiL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImI0%0D%0ANzE2NDNmZTYzYzRiNmM4NzU5MjRmYWMxODFhNmYyIiwidXNlcm5hbWUiOiJmYjdiNjQ3MGI5Njg0%0D%0ANDJjOTgxZGM3OWUwNTQ1ZGQ5MyJ9";
 
 function HeyGenFallback() {
   const containerRef = useRef(null);
   useEffect(() => {
     const node = containerRef.current;
     if (!node) return;
-    const iframe = document.createElement('iframe');
-    iframe.title = 'HeyGen Streaming Embed';
-    iframe.allow = 'microphone';
-    iframe.sandbox = 'allow-scripts allow-forms allow-same-origin allow-popups';
+    const iframe = document.createElement("iframe");
+    iframe.title = "HeyGen Streaming Embed";
+    iframe.allow = "microphone";
+    iframe.sandbox = "allow-scripts allow-forms allow-same-origin allow-popups";
     iframe.src = `https://labs.heygen.com/guest/streaming-embed?share=${HEYGEN_FALLBACK_SHARE}&inIFrame=1`;
-    iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;';
+    iframe.style.cssText = "width:100%;height:100%;border:0;display:block;";
     node.appendChild(iframe);
     return () => {
       iframe.remove();
@@ -64,16 +64,16 @@ export default function App() {
   const maxDurationTimerRef = useRef(null);
   const idleTimerRef = useRef(null);
 
-  const [status, setStatus] = useState('idle'); // idle | connecting | ready | stopped | error
+  const [status, setStatus] = useState("idle"); // idle | connecting | ready | stopped | error
   const [error, setError] = useState(null);
   const [voiceChatActive, setVoiceChatActive] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [avatarTalking, setAvatarTalking] = useState(false);
   const [userTalking, setUserTalking] = useState(false);
-  const [textToSay, setTextToSay] = useState('');
+  const [textToSay, setTextToSay] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
-  const [apiHealthy, setApiHealthy] = useState('unknown'); // 'unknown' | 'ok' | 'down'
+  const [apiHealthy, setApiHealthy] = useState("unknown"); // 'unknown' | 'ok' | 'down'
 
   function clearFallbackTimer() {
     if (fallbackTimerRef.current) {
@@ -99,10 +99,14 @@ export default function App() {
 
   function endSessionDueToTimeout(reason) {
     console.warn(`Auto-ending session: ${reason}`);
-    fetch('/api/log-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: 'session_auto_ended', reason, source: 'client_timer' }),
+    fetch("/api/log-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "session_auto_ended",
+        reason,
+        source: "client_timer",
+      }),
     }).catch(() => {});
     endChat();
   }
@@ -110,7 +114,7 @@ export default function App() {
   function resetIdleTimer() {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     idleTimerRef.current = setTimeout(
-      () => endSessionDueToTimeout('idle_timeout'),
+      () => endSessionDueToTimeout("idle_timeout"),
       IDLE_TIMEOUT_MS,
     );
   }
@@ -118,36 +122,36 @@ export default function App() {
   function armMaxDurationTimer() {
     if (maxDurationTimerRef.current) clearTimeout(maxDurationTimerRef.current);
     maxDurationTimerRef.current = setTimeout(
-      () => endSessionDueToTimeout('max_session_duration'),
+      () => endSessionDueToTimeout("max_session_duration"),
       MAX_SESSION_MS,
     );
   }
 
-  function triggerFallback(reason = null, source = 'sdk_error') {
+  function triggerFallback(reason = null, source = "sdk_error") {
     clearFallbackTimer();
     clearSessionTimers();
     try {
       sessionRef.current?.stop().catch(() => {});
     } catch (err) {
-      console.warn('session.stop() threw during fallback', err);
+      console.warn("session.stop() threw during fallback", err);
     }
     if (reason) setError(reason);
     setUseFallback(true);
-    fetch('/api/log-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: 'fallback_triggered', reason, source }),
+    fetch("/api/log-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "fallback_triggered", reason, source }),
     }).catch(() => {});
   }
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < window.innerHeight);
     update();
-    window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
     return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
     };
   }, []);
 
@@ -171,19 +175,19 @@ export default function App() {
         /* nothing we can do here */
       }
     };
-    window.addEventListener('beforeunload', stopOnUnload);
-    window.addEventListener('pagehide', stopOnUnload);
+    window.addEventListener("beforeunload", stopOnUnload);
+    window.addEventListener("pagehide", stopOnUnload);
     return () => {
-      window.removeEventListener('beforeunload', stopOnUnload);
-      window.removeEventListener('pagehide', stopOnUnload);
+      window.removeEventListener("beforeunload", stopOnUnload);
+      window.removeEventListener("pagehide", stopOnUnload);
     };
   }, []);
 
   // URL flag: ?forceFallback=1 → go straight to fallback iframe on page load (no Talk click needed)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.has('forceFallback')) {
-      triggerFallback(null, 'forced_url_flag');
+    if (params.has("forceFallback")) {
+      triggerFallback(null, "forced_url_flag");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -194,11 +198,11 @@ export default function App() {
     let cancelled = false;
     async function probe() {
       try {
-        const r = await fetch('/api/health');
+        const r = await fetch("/api/health");
         const data = await r.json().catch(() => ({}));
-        if (!cancelled) setApiHealthy(data?.ok ? 'ok' : 'down');
+        if (!cancelled) setApiHealthy(data?.ok ? "ok" : "down");
       } catch {
-        if (!cancelled) setApiHealthy('down');
+        if (!cancelled) setApiHealthy("down");
       }
     }
     probe();
@@ -210,22 +214,30 @@ export default function App() {
   }, [useFallback]);
 
   async function connect() {
-    if (apiHealthy === 'down') {
-      triggerFallback('Health probe reports API is down', 'proactive_probe_failed');
+    if (apiHealthy === "down") {
+      triggerFallback(
+        "Health probe reports API is down",
+        "proactive_probe_failed",
+      );
       return;
     }
 
     setError(null);
     setUseFallback(false);
-    setStatus('connecting');
+    setStatus("connecting");
 
     fallbackTimerRef.current = setTimeout(() => {
-      console.warn(`Connect timeout after ${CONNECT_TIMEOUT_MS}ms — switching to fallback`);
-      triggerFallback(`Connect timeout after ${CONNECT_TIMEOUT_MS / 1000}s`, 'connect_timeout');
+      console.warn(
+        `Connect timeout after ${CONNECT_TIMEOUT_MS}ms — switching to fallback`,
+      );
+      triggerFallback(
+        `Connect timeout after ${CONNECT_TIMEOUT_MS / 1000}s`,
+        "connect_timeout",
+      );
     }, CONNECT_TIMEOUT_MS);
 
     try {
-      const tokenRes = await fetch('/api/session/token', { method: 'POST' });
+      const tokenRes = await fetch("/api/session/token", { method: "POST" });
       if (!tokenRes.ok) {
         const body = await tokenRes.json().catch(() => ({}));
         throw new Error(
@@ -233,7 +245,7 @@ export default function App() {
         );
       }
       const { session_token } = await tokenRes.json();
-      if (!session_token) throw new Error('Backend returned no session_token');
+      if (!session_token) throw new Error("Backend returned no session_token");
 
       const session = new LiveAvatarSession(session_token, { voiceChat: true });
       sessionRef.current = session;
@@ -242,7 +254,7 @@ export default function App() {
       await session.start();
     } catch (e) {
       console.error(e);
-      triggerFallback(e.message || String(e), 'sdk_error');
+      triggerFallback(e.message || String(e), "sdk_error");
     }
   }
 
@@ -250,10 +262,12 @@ export default function App() {
     session.on(SessionEvent.SESSION_STREAM_READY, async () => {
       clearFallbackTimer();
       if (videoRef.current) session.attach(videoRef.current);
-      setStatus('ready');
+      setStatus("ready");
 
       keepAliveTimerRef.current = setInterval(() => {
-        session.keepAlive().catch((err) => console.warn('keepAlive failed', err));
+        session
+          .keepAlive()
+          .catch((err) => console.warn("keepAlive failed", err));
       }, KEEP_ALIVE_MS);
 
       armMaxDurationTimer();
@@ -263,14 +277,14 @@ export default function App() {
         await session.voiceChat.start();
         await session.voiceChat.unmute();
       } catch (err) {
-        console.warn('auto-start mic failed', err);
+        console.warn("auto-start mic failed", err);
       }
     });
 
     session.on(SessionEvent.SESSION_STATE_CHANGED, (state) => {
       if (state === SessionState.DISCONNECTED) {
         clearSessionTimers();
-        setStatus('stopped');
+        setStatus("stopped");
         setVoiceChatActive(false);
       }
     });
@@ -279,7 +293,9 @@ export default function App() {
       setAvatarTalking(true);
       resetIdleTimer();
     });
-    session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => setAvatarTalking(false));
+    session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () =>
+      setAvatarTalking(false),
+    );
     session.on(AgentEventsEnum.USER_SPEAK_STARTED, () => {
       setUserTalking(true);
       resetIdleTimer();
@@ -298,7 +314,7 @@ export default function App() {
     if (!text || !sessionRef.current) return;
     try {
       await sessionRef.current.message(text);
-      setTextToSay('');
+      setTextToSay("");
       resetIdleTimer();
     } catch (e) {
       console.error(e);
@@ -323,9 +339,9 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
-    setStatus('idle');
+    setStatus("idle");
     setError(null);
-    setTextToSay('');
+    setTextToSay("");
     setUseFallback(false);
   }
 
@@ -333,8 +349,8 @@ export default function App() {
     return <HeyGenFallback />;
   }
 
-  const isReady = status === 'ready';
-  const showStartScreen = !isReady && status !== 'connecting';
+  const isReady = status === "ready";
+  const showStartScreen = !isReady && status !== "connecting";
 
   if (showStartScreen) {
     return (
@@ -367,7 +383,7 @@ export default function App() {
       {!isReady && (
         <div className="start-bg absolute inset-0 overflow-hidden flex items-center justify-center">
           <video
-            key={isMobile ? 'mob' : 'desk'}
+            key={isMobile ? "mob" : "desk"}
             ref={(el) => {
               if (!el) return;
               el.play().catch(() => {
@@ -379,7 +395,7 @@ export default function App() {
             playsInline
             preload="auto"
             className="absolute inset-0 w-full h-full object-cover"
-            src={isMobile ? '/AZa-intro-mob.mp4' : '/AZa-intro.mp4'}
+            src={isMobile ? "/AZa-intro-mob.mp4" : "/AZa-intro.mp4"}
           >
             <track kind="captions" />
           </video>
@@ -394,13 +410,17 @@ export default function App() {
           <span
             className={`px-3 py-1 rounded-full text-xs font-medium backdrop-blur ${
               avatarTalking
-                ? 'bg-emerald-500/80 text-white'
+                ? "bg-emerald-500/80 text-white"
                 : userTalking
-                  ? 'bg-sky-500/80 text-white'
-                  : 'bg-white/20 text-white'
+                  ? "bg-sky-500/80 text-white"
+                  : "bg-white/20 text-white"
             }`}
           >
-            {avatarTalking ? 'avatar speaking' : userTalking ? 'you speaking' : 'live'}
+            {avatarTalking
+              ? "avatar speaking"
+              : userTalking
+                ? "you speaking"
+                : "live"}
           </span>
         </div>
       )}
@@ -413,7 +433,7 @@ export default function App() {
               value={textToSay}
               onChange={(e) => setTextToSay(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') sendMessage();
+                if (e.key === "Enter") sendMessage();
               }}
               placeholder="Type a message…"
               className="flex-1 min-w-[12rem] px-4 py-3 rounded-full bg-white/95 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -432,7 +452,7 @@ export default function App() {
                 onClick={toggleMute}
                 className="px-5 py-3 rounded-full bg-white/20 text-white font-medium hover:bg-white/30 backdrop-blur transition-colors"
               >
-                {isMuted ? 'Unmute' : 'Mute'}
+                {isMuted ? "Unmute" : "Mute"}
               </button>
             )}
             <button
@@ -444,7 +464,9 @@ export default function App() {
             </button>
           </div>
           {error && (
-            <p className="mx-auto max-w-3xl mt-2 text-sm text-red-300">{error}</p>
+            <p className="mx-auto max-w-3xl mt-2 text-sm text-red-300">
+              {error}
+            </p>
           )}
         </div>
       )}
