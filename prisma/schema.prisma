@@ -1,0 +1,77 @@
+// Modeled on AlexZAP's schema (Visitor/Conversation/Message/Report).
+// Same column names + types so an AlexZAP `database.sqlite` can be migrated
+// row-for-row later without translation.
+//
+// Storage: libSQL — runs locally as a plain SQLite file, deploys to Turso
+// (cloud SQLite) in production via the @prisma/adapter-libsql driver adapter.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connection URL is configured in prisma.config.mjs at the project root
+// (Prisma 7 moved datasource.url out of the schema file).
+datasource db {
+  provider = "sqlite"
+}
+
+model Visitor {
+  id         String   @id @default(uuid())
+  name       String?
+  position   String?
+  company    String?
+  email      String?  @unique
+  firstVisit DateTime @default(now()) @map("first_visit")
+  lastVisit  DateTime @default(now()) @map("last_visit")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  conversations Conversation[]
+
+  @@map("visitors")
+}
+
+model Conversation {
+  id            String    @id @default(uuid())
+  visitorId     String    @map("visitor_id")
+  startTime     DateTime  @default(now()) @map("start_time")
+  endTime       DateTime? @map("end_time")
+  totalMessages Int       @default(0) @map("total_messages")
+  status        String    @default("active") // 'active' | 'ended' | 'exported'
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  visitor  Visitor   @relation(fields: [visitorId], references: [id])
+  messages Message[]
+  reports  Report[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String   @map("conversation_id")
+  sender         String // 'visitor' | 'bot' (matches AlexZAP)
+  messageText    String   @map("message_text")
+  timestamp      DateTime @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@map("messages")
+}
+
+model Report {
+  id             String   @id @default(uuid())
+  name           String
+  generatedAt    DateTime @default(now()) @map("generated_at")
+  reportData     Json     @map("report_data")
+  usedInCampaign Boolean  @default(false) @map("used_in_campaign")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  conversationId String?       @map("conversation_id")
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+
+  @@map("reports")
+}

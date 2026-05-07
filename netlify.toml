@@ -26,6 +26,31 @@
   to     = "/.netlify/functions/log-event"
   status = 200
 
+[[redirects]]
+  from   = "/api/email-transcript"
+  to     = "/.netlify/functions/email-transcript"
+  status = 200
+
+[[redirects]]
+  from   = "/api/visitor"
+  to     = "/.netlify/functions/visitor"
+  status = 200
+
+[[redirects]]
+  from   = "/api/conversation/start"
+  to     = "/.netlify/functions/conversation-start"
+  status = 200
+
+[[redirects]]
+  from   = "/api/conversation/message"
+  to     = "/.netlify/functions/conversation-message"
+  status = 200
+
+[[redirects]]
+  from   = "/api/conversation/end"
+  to     = "/.netlify/functions/conversation-end"
+  status = 200
+
 # ──────────────────────────────────────────────────────────────────────────
 # Security headers (applied to every response)
 # ──────────────────────────────────────────────────────────────────────────

@@ -72,6 +72,12 @@ export default function App() {
   const idleTimerRef = useRef(null);
   const warningTimerRef = useRef(null);
   const countdownIntervalRef = useRef(null);
+  // Persistence (Phase 2) — DB ids carried through the session so each
+  // message can be attributed to the right Conversation row server-side.
+  // Refs (not state) so SDK event closures captured at session start can
+  // read the latest values without stale-closure issues.
+  const conversationIdRef = useRef(null);
+  const visitorIdRef = useRef(null);
 
   const [status, setStatus] = useState("idle"); // idle | connecting | ready | stopped | error
   const [error, setError] = useState(null);
@@ -105,6 +111,9 @@ export default function App() {
   const [formEmail, setFormEmail] = useState("");
   const [formCompany, setFormCompany] = useState("");
   const [formError, setFormError] = useState(null);
+  const [formIsSending, setFormIsSending] = useState(false);
+  const [formStatus, setFormStatus] = useState(null); // null | 'success' | 'error'
+  const formCloseTimerRef = useRef(null);
 
   function clearFallbackTimer() {
     if (fallbackTimerRef.current) {
@@ -152,7 +161,7 @@ export default function App() {
         source: "client_timer",
       }),
     }).catch(() => {});
-    endChat();
+    endChat(reason);
   }
 
   function resetIdleTimer() {
@@ -219,6 +228,84 @@ export default function App() {
     setTranscript([]);
   }
 
+  // Persistence helpers (Phase 2). All best-effort: server-side persistence
+  // failing must not block a conversation from happening on the client.
+
+  async function persistVisitorUpsert() {
+    const payload = {};
+    if (visitor?.id) payload.existingId = visitor.id;
+    if (visitor?.name) payload.name = visitor.name;
+    if (visitor?.email) payload.email = visitor.email;
+    if (visitor?.company) payload.company = visitor.company;
+    try {
+      const r = await fetch("/api/visitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) return null;
+      const v = await r.json();
+      // Server is the source of truth for visitor.id / firstVisit / lastVisit;
+      // mirror its response back into local state + storage.
+      setVisitor(v);
+      visitorIdRef.current = v.id;
+      try {
+        localStorage.setItem("liveavatar_visitor", JSON.stringify(v));
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return v;
+    } catch {
+      return null;
+    }
+  }
+
+  async function persistConversationStart(visitorId) {
+    if (!visitorId) return;
+    try {
+      const r = await fetch("/api/conversation/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorId }),
+      });
+      if (!r.ok) return;
+      const c = await r.json();
+      conversationIdRef.current = c.id;
+    } catch {
+      /* swallow — best-effort */
+    }
+  }
+
+  async function persistMessage(role, text) {
+    const cid = conversationIdRef.current;
+    if (!cid || !text) return;
+    try {
+      await fetch("/api/conversation/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: cid, role, text }),
+      });
+    } catch {
+      /* swallow */
+    }
+  }
+
+  async function persistConversationEnd(reason) {
+    const cid = conversationIdRef.current;
+    if (!cid) return;
+    try {
+      await fetch("/api/conversation/end", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: cid, reason }),
+      });
+    } catch {
+      /* swallow */
+    } finally {
+      conversationIdRef.current = null;
+    }
+  }
+
   // Visitor capture (Land 3a). The "Tell us about you" form is opened only
   // from the email-export button during/after a conversation — never from
   // Talk. Land 3d will hook the form's submit to the email-transcript send.
@@ -227,10 +314,23 @@ export default function App() {
     setFormEmail(visitor?.email ?? "");
     setFormCompany(visitor?.company ?? "");
     setFormError(null);
+    setFormStatus(null);
+    setFormIsSending(false);
     setShowVisitorForm(true);
   }
 
-  function handleVisitorSubmit(e) {
+  function closeVisitorForm() {
+    if (formIsSending) return; // don't allow close mid-send
+    if (formCloseTimerRef.current) {
+      clearTimeout(formCloseTimerRef.current);
+      formCloseTimerRef.current = null;
+    }
+    setShowVisitorForm(false);
+    setFormStatus(null);
+    setFormError(null);
+  }
+
+  async function handleVisitorSubmit(e) {
     e.preventDefault();
     setFormError(null);
 
@@ -244,6 +344,10 @@ export default function App() {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setFormError("Please enter a valid email address.");
+      return;
+    }
+    if (transcript.length === 0) {
+      setFormError("There's no transcript to send yet.");
       return;
     }
 
@@ -268,8 +372,68 @@ export default function App() {
     }
 
     setVisitor(record);
-    setShowVisitorForm(false);
-    // TODO Land 3d: trigger email-transcript send here once /api/email-transcript exists.
+    setFormIsSending(true);
+    setFormStatus(null);
+
+    // Upgrade the server-side Visitor with the just-collected info BEFORE
+    // sending the email. Best-effort — failure here doesn't block email.
+    try {
+      const vr = await fetch("/api/visitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          existingId: record.id,
+          name,
+          email,
+          company,
+        }),
+      });
+      if (vr.ok) {
+        const v = await vr.json();
+        setVisitor(v);
+        visitorIdRef.current = v.id;
+        try {
+          localStorage.setItem("liveavatar_visitor", JSON.stringify(v));
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* swallow — best-effort */
+    }
+
+    try {
+      const r = await fetch("/api/email-transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: email,
+          transcript: transcript.map((m) => ({ role: m.role, text: m.text })),
+          visitor: { name, company },
+        }),
+      });
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        const reason = body?.error || `HTTP ${r.status}`;
+        throw new Error(reason);
+      }
+      setFormIsSending(false);
+      setFormStatus("success");
+      // Auto-dismiss the success view after a short pause.
+      formCloseTimerRef.current = setTimeout(() => {
+        setShowVisitorForm(false);
+        setFormStatus(null);
+        formCloseTimerRef.current = null;
+      }, 1500);
+    } catch (err) {
+      setFormIsSending(false);
+      setFormStatus("error");
+      setFormError(
+        err?.message === "rate_limited"
+          ? "You've sent several emails recently. Try again later."
+          : "Couldn't send the email. Please try again.",
+      );
+    }
   }
 
   // Visitor modal renderer — used from both the ended screen and the active
@@ -277,6 +441,24 @@ export default function App() {
   // wherever needed.
   function renderVisitorModal() {
     if (!showVisitorForm) return null;
+
+    if (formStatus === "success") {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl mb-3">
+              ✓
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Sent</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Check your inbox at{" "}
+              <span className="font-medium">{formEmail}</span>.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
         <form
@@ -284,7 +466,7 @@ export default function App() {
           className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4"
         >
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Tell us about you</h2>
+            <h2 className="text-xl font-bold text-gray-900">Email transcript</h2>
             <p className="text-sm text-gray-600 mt-1">
               We'll send the transcript to this address.
             </p>
@@ -298,7 +480,8 @@ export default function App() {
               onChange={(e) => setFormName(e.target.value)}
               required
               autoFocus
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+              disabled={formIsSending}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </label>
 
@@ -309,7 +492,8 @@ export default function App() {
               value={formEmail}
               onChange={(e) => setFormEmail(e.target.value)}
               required
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+              disabled={formIsSending}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </label>
 
@@ -320,7 +504,8 @@ export default function App() {
               value={formCompany}
               onChange={(e) => setFormCompany(e.target.value)}
               required
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+              disabled={formIsSending}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </label>
 
@@ -329,16 +514,18 @@ export default function App() {
           <div className="flex gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setShowVisitorForm(false)}
-              className="flex-1 px-4 py-3 rounded-full bg-gray-200 text-gray-900 font-medium hover:bg-gray-300 transition-colors"
+              onClick={closeVisitorForm}
+              disabled={formIsSending}
+              className="flex-1 px-4 py-3 rounded-full bg-gray-200 text-gray-900 font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-3 rounded-full bg-gradient-to-tr from-red-600 to-red-950 text-white font-semibold hover:shadow-xl transition-all duration-300"
+              disabled={formIsSending}
+              className="flex-1 px-4 py-3 rounded-full bg-gradient-to-tr from-red-600 to-red-950 text-white font-semibold hover:shadow-xl disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-300"
             >
-              Continue
+              {formIsSending ? "Sending…" : "Send transcript"}
             </button>
           </div>
         </form>
@@ -416,6 +603,7 @@ export default function App() {
   function triggerFallback(reason = null, source = "sdk_error") {
     clearFallbackTimer();
     clearSessionTimers();
+    persistConversationEnd(`fallback:${source}`);
     try {
       sessionRef.current?.stop().catch(() => {});
     } catch (err) {
@@ -441,11 +629,18 @@ export default function App() {
     };
   }, []);
 
+  // Keep visitorIdRef in sync with the visitor state (so values loaded from
+  // localStorage on mount are available to event closures right away).
+  useEffect(() => {
+    visitorIdRef.current = visitor?.id ?? null;
+  }, [visitor]);
+
   useEffect(() => {
     return () => {
       clearFallbackTimer();
       clearSessionTimers();
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (formCloseTimerRef.current) clearTimeout(formCloseTimerRef.current);
       sessionRef.current?.stop().catch(() => {});
     };
   }, []);
@@ -454,12 +649,25 @@ export default function App() {
   // Without this, sessions stay alive on HeyGen's side until their ~5 min cleanup,
   // wasting account quota and contributing to the concurrency limit.
   // pagehide fires reliably on iOS Safari (where beforeunload often doesn't).
+  // Also closes the DB Conversation row via sendBeacon (survives unload).
   useEffect(() => {
     const stopOnUnload = () => {
       try {
         sessionRef.current?.stop();
       } catch {
         /* nothing we can do here */
+      }
+      const cid = conversationIdRef.current;
+      if (cid && navigator.sendBeacon) {
+        try {
+          const blob = new Blob(
+            [JSON.stringify({ conversationId: cid, reason: "page_unload" })],
+            { type: "application/json" },
+          );
+          navigator.sendBeacon("/api/conversation/end", blob);
+        } catch {
+          /* swallow */
+        }
       }
     };
     window.addEventListener("beforeunload", stopOnUnload);
@@ -519,6 +727,12 @@ export default function App() {
     setUseFallback(false);
     setStatus("connecting");
     clearTranscript();
+    conversationIdRef.current = null;
+
+    // Best-effort: ensure we have a server-side Visitor row before the SDK
+    // becomes ready. If this fails the conversation still happens client-side;
+    // it just won't appear in the admin DB later.
+    persistVisitorUpsert();
 
     fallbackTimerRef.current = setTimeout(() => {
       console.warn(
@@ -568,6 +782,11 @@ export default function App() {
       armMaxDurationTimer(MAX_SESSION_MS);
       resetIdleTimer();
 
+      // Persistence (Phase 2): start a Conversation row now that the SDK is
+      // truly streaming. Best-effort — if persistVisitorUpsert hasn't yet
+      // resolved, visitorIdRef will be null and we skip silently.
+      persistConversationStart(visitorIdRef.current);
+
       try {
         await session.voiceChat.start();
         await session.voiceChat.unmute();
@@ -603,9 +822,11 @@ export default function App() {
     // utterance ends, which is the only moment we want to show the message.
     session.on(AgentEventsEnum.USER_TRANSCRIPTION, (e) => {
       addTranscriptMessage("user", e.text);
+      persistMessage("user", e.text);
     });
     session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION, (e) => {
       addTranscriptMessage("avatar", e.text);
+      persistMessage("avatar", e.text);
     });
 
     session.voiceChat.on(VoiceChatEvent.STATE_CHANGED, (s) => {
@@ -619,8 +840,10 @@ export default function App() {
     const text = textToSay.trim();
     if (!text || !sessionRef.current) return;
     try {
-      // Typed input doesn't emit USER_TRANSCRIPTION, so add it to the transcript directly.
+      // Typed input doesn't emit USER_TRANSCRIPTION, so add it to the transcript
+      // and persist it directly.
       addTranscriptMessage("user", text);
+      persistMessage("user", text);
       await sessionRef.current.message(text);
       setTextToSay("");
       resetIdleTimer();
@@ -639,9 +862,12 @@ export default function App() {
     }
   }
 
-  async function endChat() {
+  async function endChat(reason = "user_ended") {
     clearFallbackTimer();
     clearSessionTimers();
+    // Close the DB Conversation row first so server-side state reflects
+    // "ended" even if the SDK stop call hangs.
+    persistConversationEnd(reason);
     try {
       await sessionRef.current?.stop();
     } catch (e) {
