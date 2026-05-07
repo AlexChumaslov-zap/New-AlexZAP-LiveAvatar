@@ -272,6 +272,80 @@ export default function App() {
     // TODO Land 3d: trigger email-transcript send here once /api/email-transcript exists.
   }
 
+  // Visitor modal renderer — used from both the ended screen and the active
+  // session, so it's defined once here and called as `{renderVisitorModal()}`
+  // wherever needed.
+  function renderVisitorModal() {
+    if (!showVisitorForm) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <form
+          onSubmit={handleVisitorSubmit}
+          className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4"
+        >
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Tell us about you</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              We'll send the transcript to this address.
+            </p>
+          </div>
+
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Name</span>
+            <input
+              type="text"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              required
+              autoFocus
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Email</span>
+            <input
+              type="email"
+              value={formEmail}
+              onChange={(e) => setFormEmail(e.target.value)}
+              required
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Company</span>
+            <input
+              type="text"
+              value={formCompany}
+              onChange={(e) => setFormCompany(e.target.value)}
+              required
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </label>
+
+          {formError && <p className="text-sm text-red-700">{formError}</p>}
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowVisitorForm(false)}
+              className="flex-1 px-4 py-3 rounded-full bg-gray-200 text-gray-900 font-medium hover:bg-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-3 rounded-full bg-gradient-to-tr from-red-600 to-red-950 text-white font-semibold hover:shadow-xl transition-all duration-300"
+            >
+              Continue
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   function showToast(message) {
     setToast(message);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -578,7 +652,14 @@ export default function App() {
     setTextToSay("");
     setUseFallback(false);
     setHasExtended(false);
+    // Transcript is intentionally preserved so the visitor can review,
+    // download, share, or email it from the ended screen. Cleared only when
+    // they explicitly start a new chat (see startNewChat below).
+  }
+
+  function startNewChat() {
     clearTranscript();
+    connect();
   }
 
   if (useFallback) {
@@ -586,7 +667,129 @@ export default function App() {
   }
 
   const isReady = status === "ready";
-  const showStartScreen = !isReady && status !== "connecting";
+  const sessionInactive = !isReady && status !== "connecting";
+  const showEndedScreen = sessionInactive && transcript.length > 0;
+  const showStartScreen = sessionInactive && transcript.length === 0;
+
+  if (showEndedScreen) {
+    return (
+      <div className="start-bg fixed inset-0 flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl bg-black/75 backdrop-blur rounded-2xl shadow-2xl p-6 space-y-4">
+          <div>
+            <h2 className="text-xl font-bold text-white">Conversation ended</h2>
+            <p className="text-sm text-white/70 mt-1">
+              Save or share the transcript before starting a new chat.
+            </p>
+          </div>
+
+          <div className="max-h-64 overflow-y-auto rounded-lg bg-white/5 p-3 space-y-2">
+            {transcript.map((msg) => (
+              <div
+                key={msg.id}
+                className={msg.role === "user" ? "text-right" : "text-left"}
+              >
+                <span
+                  className={`inline-block max-w-[85%] px-3 py-2 rounded-lg text-sm text-left ${
+                    msg.role === "user"
+                      ? "bg-red-600/80 text-white"
+                      : "bg-white/95 text-gray-900"
+                  }`}
+                >
+                  {msg.role === "avatar" ? (
+                    <div className="[&_p]:my-0 [&_p:not(:last-child)]:mb-2 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+                      <Markdown>{msg.text}</Markdown>
+                    </div>
+                  ) : (
+                    msg.text
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2 justify-center pt-2">
+            <button
+              type="button"
+              onClick={downloadTranscript}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white text-sm font-medium backdrop-blur transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
+                />
+              </svg>
+              Download
+            </button>
+            <button
+              type="button"
+              onClick={shareTranscript}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white text-sm font-medium backdrop-blur transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z"
+                />
+              </svg>
+              Share
+            </button>
+            <button
+              type="button"
+              onClick={handleEmailClick}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white text-sm font-medium backdrop-blur transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
+                />
+              </svg>
+              Email
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="w-full px-4 py-3 rounded-full bg-gradient-to-tr from-red-600 to-red-950 text-white font-semibold hover:shadow-xl transition-all duration-300"
+          >
+            Start new chat
+          </button>
+
+          {toast && (
+            <p className="text-center text-sm text-white/80">{toast}</p>
+          )}
+        </div>
+
+        {renderVisitorModal()}
+      </div>
+    );
+  }
 
   if (showStartScreen) {
     return (
@@ -844,75 +1047,7 @@ export default function App() {
         </div>
       )}
 
-      {showVisitorForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form
-            onSubmit={handleVisitorSubmit}
-            className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4"
-          >
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                Tell us about you
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">
-                We'll send the transcript to this address.
-              </p>
-            </div>
-
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Name</span>
-              <input
-                type="text"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                required
-                autoFocus
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Email</span>
-              <input
-                type="email"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                required
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Company</span>
-              <input
-                type="text"
-                value={formCompany}
-                onChange={(e) => setFormCompany(e.target.value)}
-                required
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-            </label>
-
-            {formError && <p className="text-sm text-red-700">{formError}</p>}
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowVisitorForm(false)}
-                className="flex-1 px-4 py-3 rounded-full bg-gray-200 text-gray-900 font-medium hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex-1 px-4 py-3 rounded-full bg-gradient-to-tr from-red-600 to-red-950 text-white font-semibold hover:shadow-xl transition-all duration-300"
-              >
-                Continue
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {renderVisitorModal()}
     </div>
   );
 }
