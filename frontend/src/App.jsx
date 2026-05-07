@@ -85,8 +85,26 @@ export default function App() {
   const [apiHealthy, setApiHealthy] = useState("unknown"); // 'unknown' | 'ok' | 'down'
   const [endsInSeconds, setEndsInSeconds] = useState(null); // null | number — countdown shown during last 20s
   const [hasExtended, setHasExtended] = useState(false);
-  const [transcript, setTranscript] = useState([]); // [{ id, role, text, status, timestamp }]
+  const [transcript, setTranscript] = useState([]); // [{ id, role: 'user'|'avatar', text, timestamp }]
   const transcriptScrollRef = useRef(null);
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  // Visitor identity (Land 3a). Persisted in localStorage so returning visitors
+  // are recognized. Land 3c will sync this to Postgres.
+  const [visitor, setVisitor] = useState(() => {
+    try {
+      const raw = localStorage.getItem("liveavatar_visitor");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [showVisitorForm, setShowVisitorForm] = useState(false);
+  const [formName, setFormName] = useState("");
+  const [formEmail, setFormEmail] = useState("");
+  const [formCompany, setFormCompany] = useState("");
+  const [formError, setFormError] = useState(null);
 
   function clearFallbackTimer() {
     if (fallbackTimerRef.current) {
@@ -180,57 +198,145 @@ export default function App() {
     }).catch(() => {});
   }
 
-  // Transcript helpers. Streaming model: while a role is mid-utterance the SDK
-  // emits *_TRANSCRIPTION_CHUNK events with cumulative text; when the utterance
-  // completes a *_TRANSCRIPTION event arrives. We update the trailing partial
-  // entry of that role in place, then mark it complete.
-  function appendTranscriptChunk(role, text) {
-    setTranscript((t) => {
-      const last = t[t.length - 1];
-      if (last && last.role === role && last.status === "partial") {
-        return [...t.slice(0, -1), { ...last, text }];
-      }
-      return [
-        ...t,
-        {
-          id:
-            (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
-            `${Date.now()}-${Math.random()}`,
-          role,
-          text,
-          status: "partial",
-          timestamp: Date.now(),
-        },
-      ];
-    });
-  }
-
-  function finalizeTranscriptMessage(role, text) {
-    setTranscript((t) => {
-      const last = t[t.length - 1];
-      if (last && last.role === role && last.status === "partial") {
-        return [
-          ...t.slice(0, -1),
-          { ...last, text, status: "complete" },
-        ];
-      }
-      return [
-        ...t,
-        {
-          id:
-            (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
-            `${Date.now()}-${Math.random()}`,
-          role,
-          text,
-          status: "complete",
-          timestamp: Date.now(),
-        },
-      ];
-    });
+  // Append a finished message to the transcript. We only call this when an
+  // utterance completes (full SDK *_TRANSCRIPTION event, or a typed message
+  // from the user) — partial chunks are intentionally ignored.
+  function addTranscriptMessage(role, text) {
+    setTranscript((t) => [
+      ...t,
+      {
+        id:
+          (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
+          `${Date.now()}-${Math.random()}`,
+        role,
+        text,
+        timestamp: Date.now(),
+      },
+    ]);
   }
 
   function clearTranscript() {
     setTranscript([]);
+  }
+
+  // Visitor capture (Land 3a). The "Tell us about you" form is opened only
+  // from the email-export button during/after a conversation — never from
+  // Talk. Land 3d will hook the form's submit to the email-transcript send.
+  function handleEmailClick() {
+    setFormName(visitor?.name ?? "");
+    setFormEmail(visitor?.email ?? "");
+    setFormCompany(visitor?.company ?? "");
+    setFormError(null);
+    setShowVisitorForm(true);
+  }
+
+  function handleVisitorSubmit(e) {
+    e.preventDefault();
+    setFormError(null);
+
+    const name = formName.trim();
+    const email = formEmail.trim();
+    const company = formCompany.trim();
+
+    if (!name || !email || !company) {
+      setFormError("Please fill in all fields.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFormError("Please enter a valid email address.");
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const record = {
+      id:
+        visitor?.id ||
+        (typeof crypto !== "undefined" && crypto.randomUUID?.()) ||
+        `visitor-${Date.now()}`,
+      name,
+      email,
+      company,
+      firstVisit: visitor?.firstVisit ?? nowIso,
+      lastVisit: nowIso,
+    };
+
+    try {
+      localStorage.setItem("liveavatar_visitor", JSON.stringify(record));
+    } catch {
+      // localStorage may be unavailable (private mode, quota). Proceed anyway —
+      // the in-memory state still works for the current session.
+    }
+
+    setVisitor(record);
+    setShowVisitorForm(false);
+    // TODO Land 3d: trigger email-transcript send here once /api/email-transcript exists.
+  }
+
+  function showToast(message) {
+    setToast(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  }
+
+  function buildTranscriptText() {
+    const fmt = (ts) =>
+      new Date(ts).toLocaleString(undefined, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    return transcript
+      .map(
+        (m) =>
+          `[${fmt(m.timestamp)}] ${m.role === "user" ? "You" : "Avatar"}:\n${m.text}`,
+      )
+      .join("\n\n");
+  }
+
+  function downloadTranscript() {
+    if (transcript.length === 0) return;
+    const text = buildTranscriptText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `liveavatar-transcript-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function copyTranscriptToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Copied to clipboard");
+    } catch {
+      showToast("Couldn't copy — try Download instead");
+    }
+  }
+
+  async function shareTranscript() {
+    if (transcript.length === 0) return;
+    const text = buildTranscriptText();
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "LiveAvatar conversation",
+          text,
+        });
+      } catch (err) {
+        // User cancelled the share sheet — leave silently.
+        if (err?.name === "AbortError") return;
+        // Anything else: fall back to clipboard so the user gets *something*.
+        await copyTranscriptToClipboard(text);
+      }
+    } else {
+      await copyTranscriptToClipboard(text);
+    }
   }
 
   function triggerFallback(reason = null, source = "sdk_error") {
@@ -265,6 +371,7 @@ export default function App() {
     return () => {
       clearFallbackTimer();
       clearSessionTimers();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       sessionRef.current?.stop().catch(() => {});
     };
   }, []);
@@ -416,17 +523,15 @@ export default function App() {
     });
     session.on(AgentEventsEnum.USER_SPEAK_ENDED, () => setUserTalking(false));
 
-    session.on(AgentEventsEnum.USER_TRANSCRIPTION_CHUNK, (e) => {
-      appendTranscriptChunk("user", e.text);
-    });
+    // We deliberately do NOT subscribe to *_TRANSCRIPTION_CHUNK events.
+    // Streaming partial words appear before the speaker finishes their thought,
+    // which reads as noise. The full *_TRANSCRIPTION events fire when the
+    // utterance ends, which is the only moment we want to show the message.
     session.on(AgentEventsEnum.USER_TRANSCRIPTION, (e) => {
-      finalizeTranscriptMessage("user", e.text);
-    });
-    session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION_CHUNK, (e) => {
-      appendTranscriptChunk("avatar", e.text);
+      addTranscriptMessage("user", e.text);
     });
     session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION, (e) => {
-      finalizeTranscriptMessage("avatar", e.text);
+      addTranscriptMessage("avatar", e.text);
     });
 
     session.voiceChat.on(VoiceChatEvent.STATE_CHANGED, (s) => {
@@ -441,7 +546,7 @@ export default function App() {
     if (!text || !sessionRef.current) return;
     try {
       // Typed input doesn't emit USER_TRANSCRIPTION, so add it to the transcript directly.
-      finalizeTranscriptMessage("user", text);
+      addTranscriptMessage("user", text);
       await sessionRef.current.message(text);
       setTextToSay("");
       resetIdleTimer();
@@ -494,6 +599,12 @@ export default function App() {
           >
             Talk
           </button>
+          {visitor && (
+            <p className="text-sm text-gray-700">
+              Welcome back,{" "}
+              <span className="font-semibold">{visitor.name}</span>
+            </p>
+          )}
           {error && (
             <p className="max-w-md text-sm text-red-700 text-center">{error}</p>
           )}
@@ -556,6 +667,12 @@ export default function App() {
         </div>
       )}
 
+      {toast && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-black/80 text-white text-sm shadow-lg pointer-events-none z-20">
+          {toast}
+        </div>
+      )}
+
       {isReady && endsInSeconds !== null && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 w-full max-w-md pointer-events-none">
           <div className="bg-gradient-to-tr from-red-600 to-red-950 text-white rounded-full shadow-xl px-5 py-3 flex items-center justify-between gap-3 pointer-events-auto transition-all duration-300">
@@ -578,6 +695,76 @@ export default function App() {
 
       {isReady && (
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+          {transcript.length > 0 && (
+            <div className="mx-auto max-w-3xl mb-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={downloadTranscript}
+                title="Download transcript"
+                aria-label="Download transcript"
+                className="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.8}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={shareTranscript}
+                title="Share transcript"
+                aria-label="Share transcript"
+                className="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.8}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={handleEmailClick}
+                title="Email transcript"
+                aria-label="Email transcript"
+                className="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.8}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
           <div className="mx-auto max-w-3xl mb-3">
             <div
               ref={transcriptScrollRef}
@@ -598,7 +785,7 @@ export default function App() {
                         msg.role === "user"
                           ? "bg-red-600/80 text-white"
                           : "bg-white/95 text-gray-900"
-                      } ${msg.status === "partial" ? "opacity-60" : ""}`}
+                      }`}
                     >
                       {msg.role === "avatar" ? (
                         <div className="[&_p]:my-0 [&_p:not(:last-child)]:mb-2 [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
@@ -654,6 +841,76 @@ export default function App() {
               {error}
             </p>
           )}
+        </div>
+      )}
+
+      {showVisitorForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <form
+            onSubmit={handleVisitorSubmit}
+            className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4"
+          >
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                Tell us about you
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                We'll send the transcript to this address.
+              </p>
+            </div>
+
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Name</span>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                required
+                autoFocus
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Email</span>
+              <input
+                type="email"
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+                required
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Company</span>
+              <input
+                type="text"
+                value={formCompany}
+                onChange={(e) => setFormCompany(e.target.value)}
+                required
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </label>
+
+            {formError && <p className="text-sm text-red-700">{formError}</p>}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowVisitorForm(false)}
+                className="flex-1 px-4 py-3 rounded-full bg-gray-200 text-gray-900 font-medium hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-3 rounded-full bg-gradient-to-tr from-red-600 to-red-950 text-white font-semibold hover:shadow-xl transition-all duration-300"
+              >
+                Continue
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
