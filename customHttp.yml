@@ -1,0 +1,33 @@
+customHeaders:
+  - pattern: '**'
+    headers:
+      - key: 'Strict-Transport-Security'
+        value: 'max-age=63072000; includeSubDomains; preload'
+      - key: 'X-Content-Type-Options'
+        value: 'nosniff'
+      - key: 'Referrer-Policy'
+        value: 'strict-origin-when-cross-origin'
+      - key: 'X-Robots-Tag'
+        value: 'noindex, nofollow, noarchive, nosnippet, noimageindex'
+      - key: 'Permissions-Policy'
+        value: 'microphone=*, camera=(), geolocation=(), payment=(), usb=()'
+      # CSP must allow:
+      #   'unsafe-eval' — HeyGen LiveAvatar WebRTC SDK uses eval() internally
+      #   'unsafe-inline' for styles — Vite injects critical CSS inline
+      #   wss: connect-src — WebRTC signaling + LiveKit/AWS media streams
+      #   blob: / data: — MediaStream + decoded media chunks
+      #   https://*.heygen.com, https://*.heygen.ai — fallback embed origins
+      #   https://*.execute-api.*.amazonaws.com — our API Gateway endpoint
+      #   https://*.amplifyapp.com — Amplify-hosted assets
+      - key: 'Content-Security-Policy'
+        value: >
+          default-src 'self' https: data: blob:;
+          script-src 'self' 'unsafe-eval' 'unsafe-inline' https:;
+          style-src 'self' 'unsafe-inline' https:;
+          img-src 'self' data: blob: https:;
+          font-src 'self' data: https:;
+          media-src 'self' blob: https:;
+          connect-src 'self' https: wss: blob:;
+          frame-src 'self' https://labs.heygen.com https://*.heygen.com https://*.heygen.ai;
+          worker-src 'self' blob:;
+          frame-ancestors 'self' https://zaptest.ai https://*.zaptest.ai https://alexchumaslov-zap.github.io;
