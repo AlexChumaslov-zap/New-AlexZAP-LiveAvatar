@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "netlify dev",
-    "build": "cd frontend && npm install && npm run build",
+    "build": "npm install && npx prisma generate && cd frontend && npm install && npm run build",
     "setup:context": "node scripts/setup-context.js"
   },
   "devDependencies": {
