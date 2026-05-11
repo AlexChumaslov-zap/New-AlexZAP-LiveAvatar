@@ -51,6 +51,50 @@
   to     = "/.netlify/functions/conversation-end"
   status = 200
 
+# Admin API — Basic Auth applied by the admin-auth edge function.
+[[redirects]]
+  from   = "/api/admin/conversations"
+  to     = "/.netlify/functions/admin-conversations-list"
+  status = 200
+
+[[redirects]]
+  from   = "/api/admin/conversations/bulk-end"
+  to     = "/.netlify/functions/admin-conversations-bulk-end"
+  status = 200
+
+[[redirects]]
+  from   = "/api/admin/conversations/*/end"
+  to     = "/.netlify/functions/admin-conversation-end?id=:splat"
+  status = 200
+
+[[redirects]]
+  from   = "/api/admin/conversations/*/delete"
+  to     = "/.netlify/functions/admin-conversation-delete?id=:splat"
+  status = 200
+
+[[redirects]]
+  from   = "/api/admin/conversations/*/push-salesforce"
+  to     = "/.netlify/functions/admin-conversation-push-salesforce?id=:splat"
+  status = 200
+
+[[redirects]]
+  from   = "/api/admin/reports/generate"
+  to     = "/.netlify/functions/admin-reports-generate"
+  status = 200
+
+[[redirects]]
+  from   = "/api/admin/conversations/*"
+  to     = "/.netlify/functions/admin-conversation-detail?id=:splat"
+  status = 200
+
+# SPA fallback: any non-static, non-API path serves index.html so React Router
+# can route /admin/* on the client. Order matters — this must come AFTER the
+# /api/* rules above so they take precedence.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
 # ──────────────────────────────────────────────────────────────────────────
 # Security headers (applied to every response)
 # ──────────────────────────────────────────────────────────────────────────

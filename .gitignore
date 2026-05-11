@@ -5,5 +5,8 @@ dist/
 .netlify/
 .playwright-mcp/
 deno.lock
+scripts/data/
+prisma/dev.db
+prisma/dev.db-journal
 .DS_Store
 *.log
