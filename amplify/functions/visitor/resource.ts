@@ -1,0 +1,14 @@
+import { defineFunction, secret } from "@aws-amplify/backend";
+
+export const visitor = defineFunction({
+  name: "visitor",
+  entry: "./handler.js",
+  runtime: 20,
+  timeoutSeconds: 15,
+  memoryMB: 384,
+  environment: {
+    DATABASE_URL: secret("DATABASE_URL"),
+    TURSO_AUTH_TOKEN: secret("TURSO_AUTH_TOKEN"),
+    RATE_LIMIT_DISABLED: secret("RATE_LIMIT_DISABLED"),
+  },
+});

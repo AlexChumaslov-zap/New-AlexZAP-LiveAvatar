@@ -4,13 +4,23 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "netlify dev",
-    "build": "npm install && npx prisma generate && cd frontend && npm install && npm run build",
+    "dev": "npx ampx sandbox",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "build": "npm install && npx prisma generate && npm run build:frontend",
     "setup:context": "node scripts/setup-context.js"
   },
   "devDependencies": {
+    "@aws-amplify/backend": "^1.10.0",
+    "@aws-amplify/backend-cli": "^1.4.0",
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.7.0",
+    "aws-cdk-lib": "^2.155.0",
+    "constructs": "^10.3.0",
     "dotenv": "^16.4.5",
-    "prisma": "^7.8.0"
+    "prisma": "^7.8.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",

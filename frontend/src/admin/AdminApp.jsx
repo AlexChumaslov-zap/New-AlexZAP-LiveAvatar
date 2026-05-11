@@ -1,5 +1,5 @@
 // Admin app shell. Loads only on /admin/* routes (lazy-chunked from main.jsx).
-// Auth is already handled by the netlify/edge-functions/admin-auth.js gate;
+// Auth is enforced by lib/adminAuth.js inline in each /api/admin/* Lambda;
 // if we reach this component, the user has provided valid credentials.
 
 import { lazy, Suspense } from "react";
