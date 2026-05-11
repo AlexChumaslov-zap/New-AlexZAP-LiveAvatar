@@ -14,6 +14,8 @@ export const adminReportsGenerate = defineFunction({
     ADMIN_USERNAME: secret("ADMIN_USERNAME"),
     ADMIN_PASSWORD: secret("ADMIN_PASSWORD"),
     OPENAI_API_KEY: secret("OPENAI_API_KEY"),
-    OPENAI_REPORT_MODEL: secret("OPENAI_REPORT_MODEL"),
+    // OPENAI_REPORT_MODEL is optional and defaults to "gpt-4o-mini". Re-add
+    // as a secret only to override the model — e.g. "gpt-4o" or "gpt-4o-mini-2024-...".
+
   },
 });

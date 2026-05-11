@@ -15,6 +15,8 @@ export const adminConversationPushSalesforce = defineFunction({
     SALESFORCE_CLIENT_SECRET: secret("SALESFORCE_CLIENT_SECRET"),
     SALESFORCE_USERNAME: secret("SALESFORCE_USERNAME"),
     SALESFORCE_PASSWORD: secret("SALESFORCE_PASSWORD"),
-    SALESFORCE_LOGIN_URL: secret("SALESFORCE_LOGIN_URL"),
+    // SALESFORCE_LOGIN_URL is optional and defaults to https://login.salesforce.com.
+    // Re-add as a secret only if pointing at a sandbox (https://test.salesforce.com)
+    // or a My Domain URL — otherwise leave undeclared so the default kicks in.
   },
 });
