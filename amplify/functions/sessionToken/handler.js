@@ -29,19 +29,19 @@ export const handler = async (event) => {
 
   const isSandbox = LIVEAVATAR_SANDBOX === "true" || LIVEAVATAR_SANDBOX === "1";
 
-  // Sentinel values that mean "not actually set" — Amplify Gen 2 secrets
-  // can't be empty, so the operator has to write something. Treat common
-  // placeholders as missing so we don't pass them through to HeyGen as a
-  // literal ID (which would fail with a 4xx).
-  const SENTINELS = new Set(["", "none", "unset", "null", "n/a", "-"]);
-  const voiceId =
-    LIVEAVATAR_VOICE_ID && !SENTINELS.has(LIVEAVATAR_VOICE_ID.toLowerCase())
-      ? LIVEAVATAR_VOICE_ID
-      : null;
-  const contextId =
-    LIVEAVATAR_CONTEXT_ID && !SENTINELS.has(LIVEAVATAR_CONTEXT_ID.toLowerCase())
-      ? LIVEAVATAR_CONTEXT_ID
-      : null;
+  // HeyGen's voice_id and context_id must be UUIDs. Amplify Gen 2 secrets
+  // can't be empty, so operators sometimes set placeholders like "<unset>"
+  // or "none". Validate the UUID format and treat anything else as missing
+  // — passing a non-UUID string through to HeyGen returns a 422 and aborts
+  // the session.
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const voiceId = UUID_RE.test(LIVEAVATAR_VOICE_ID || "")
+    ? LIVEAVATAR_VOICE_ID
+    : null;
+  const contextId = UUID_RE.test(LIVEAVATAR_CONTEXT_ID || "")
+    ? LIVEAVATAR_CONTEXT_ID
+    : null;
 
   try {
     const r = await fetch(`${LIVEAVATAR_API_BASE}/v1/sessions/token`, {
