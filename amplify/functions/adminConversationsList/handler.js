@@ -58,6 +58,16 @@ export const handler = async (event) => {
           visitor: {
             select: { id: true, name: true, email: true, company: true },
           },
+          // Pull the latest qualification report (if any) per conversation
+          // so the list can show a Hot/Warm/Cold chip without a second
+          // round-trip. Filtering by name is cheap; the JSON payload is
+          // small (just { Rating: "..." }).
+          reports: {
+            where: { name: "Qualification Assessment Report" },
+            orderBy: { generatedAt: "desc" },
+            take: 1,
+            select: { reportData: true },
+          },
         },
         orderBy: { [sortKey]: order },
         take: pageSize,
@@ -70,6 +80,11 @@ export const handler = async (event) => {
       const endMs = c.endTime ? new Date(c.endTime).getTime() : null;
       const durationMs =
         startMs && endMs && endMs >= startMs ? endMs - startMs : null;
+      const rawRating = c.reports?.[0]?.reportData?.Rating;
+      const qualificationRating =
+        rawRating === "Hot" || rawRating === "Warm" || rawRating === "Cold"
+          ? rawRating
+          : null;
       return {
         id: c.id,
         startTime: c.startTime,
@@ -78,6 +93,7 @@ export const handler = async (event) => {
         status: c.status,
         durationMs,
         visitor: c.visitor,
+        qualificationRating,
       };
     });
 

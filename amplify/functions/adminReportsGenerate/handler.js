@@ -8,7 +8,13 @@ import {
 import { json, parseBody, method } from "../../../lib/lambda.js";
 import { requireAdmin } from "../../../lib/adminAuth.js";
 
+// Order matters — sections are inserted as separate Report rows in this
+// order, and the detail UI lists them top-down. Triage-critical sections
+// (Qualification + NextActions) come first so admins see them without
+// scrolling.
 const REPORT_SECTIONS = [
+  { key: "QualificationAssessment", name: "Qualification Assessment Report" },
+  { key: "RecommendedNextActions", name: "Recommended Next Actions Report" },
   { key: "LeadPreQualificationReport", name: "Lead Pre-Qualification Report" },
   { key: "PainPointsReport", name: "Pain Points Report" },
   { key: "AutomationReadinessReport", name: "Automation Readiness Report" },

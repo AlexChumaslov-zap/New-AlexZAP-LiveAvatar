@@ -50,6 +50,27 @@ const STATUS_CHIP = {
   exported: "bg-sky-500/20 text-sky-200",
 };
 
+const RATING_CHIP = {
+  Hot: "bg-red-500/25 text-red-200 border border-red-500/40",
+  Warm: "bg-amber-500/25 text-amber-200 border border-amber-500/40",
+  Cold: "bg-sky-500/20 text-sky-300 border border-sky-500/30",
+};
+
+function RatingBadge({ rating }) {
+  if (!rating) {
+    return <span className="text-xs text-gray-600">—</span>;
+  }
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+        RATING_CHIP[rating] || "bg-gray-700 text-gray-300"
+      }`}
+    >
+      {rating}
+    </span>
+  );
+}
+
 function StatusBadge({ status }) {
   return (
     <span
@@ -379,6 +400,9 @@ export default function ConversationsList() {
                   order={order}
                   onSort={onSortClick}
                 />
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">
+                  Rating
+                </th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">
                   Actions
                 </th>
@@ -387,21 +411,21 @@ export default function ConversationsList() {
             <tbody className="divide-y divide-gray-800">
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-400">
+                  <td colSpan={8} className="px-3 py-6 text-center text-sm text-gray-400">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-red-300">
+                  <td colSpan={8} className="px-3 py-6 text-center text-sm text-red-300">
                     Couldn't load conversations: {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && data && data.conversations.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-400">
+                  <td colSpan={8} className="px-3 py-6 text-center text-sm text-gray-400">
                     No conversations match these filters.
                   </td>
                 </tr>
@@ -450,6 +474,9 @@ export default function ConversationsList() {
                       </td>
                       <td className="px-3 py-2 text-sm">
                         <StatusBadge status={c.status} />
+                      </td>
+                      <td className="px-3 py-2 text-sm">
+                        <RatingBadge rating={c.qualificationRating} />
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <Link

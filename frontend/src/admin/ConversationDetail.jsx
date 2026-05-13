@@ -60,6 +60,26 @@ function StatusChip({ status }) {
   );
 }
 
+const RATING_CHIP = {
+  Hot: "bg-red-500/25 text-red-200 border border-red-500/40",
+  Warm: "bg-amber-500/25 text-amber-200 border border-amber-500/40",
+  Cold: "bg-sky-500/20 text-sky-300 border border-sky-500/30",
+};
+
+function RatingChip({ rating }) {
+  if (!rating) return null;
+  return (
+    <span
+      className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+        RATING_CHIP[rating] || "bg-gray-700 text-gray-300"
+      }`}
+      title="Lead qualification rating (from AI report)"
+    >
+      {rating}
+    </span>
+  );
+}
+
 function InfoRow({ label, children }) {
   return (
     <p className="text-sm">
@@ -305,11 +325,55 @@ function renderGenericReport(data) {
   );
 }
 
+// Big colored chip for the lead rating, with same color logic as the
+// Rating column on the list view but sized up for the detail card.
+function renderQualificationAssessment(data) {
+  const rating = data.Rating;
+  const tones = {
+    Hot: "bg-red-500/25 text-red-200 border border-red-500/40",
+    Warm: "bg-amber-500/25 text-amber-200 border border-amber-500/40",
+    Cold: "bg-sky-500/20 text-sky-300 border border-sky-500/30",
+  };
+  const tone = tones[rating] || "bg-gray-700 text-gray-300";
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-gray-400 text-sm">Lead rating:</span>
+      <span className={`px-3 py-1 rounded-full text-base font-bold ${tone}`}>
+        {rating || "Not rated"}
+      </span>
+    </div>
+  );
+}
+
+function renderRecommendedNextActions(data) {
+  const actions = Array.isArray(data.Actions) ? data.Actions : [];
+  if (actions.length === 0) {
+    return (
+      <p className="italic text-gray-500">No next actions recommended.</p>
+    );
+  }
+  return (
+    <ol className="list-decimal pl-5 space-y-1.5 text-gray-200">
+      {actions.map((a, i) => (
+        <li key={i} className="leading-relaxed">
+          {String(a)}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function renderReportContent(report) {
   const type = report.name.toLowerCase();
   const data = report.reportData || {};
   if (!data || Object.keys(data).length === 0) {
     return <p className="italic text-gray-500">No data in this report.</p>;
+  }
+  if (type.includes("qualification assessment")) {
+    return renderQualificationAssessment(data);
+  }
+  if (type.includes("next actions")) {
+    return renderRecommendedNextActions(data);
   }
   if (type.includes("lead qualification") || type.includes("pre-qualification")) {
     return renderLeadQualification(data);
@@ -508,6 +572,16 @@ export default function ConversationDetail() {
   const visitor = conversation.visitor;
   const isActive = conversation.status === "active";
 
+  // Extract the qualification rating from the most recent qualification
+  // report (if any) so we can show a Hot/Warm/Cold chip in the header.
+  const qualificationRating = (() => {
+    const r = reports.find((r) =>
+      r.name.toLowerCase().includes("qualification assessment"),
+    );
+    const v = r?.reportData?.Rating;
+    return v === "Hot" || v === "Warm" || v === "Cold" ? v : null;
+  })();
+
   return (
     <div className="space-y-4">
       <Link
@@ -529,6 +603,7 @@ export default function ConversationDetail() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <RatingChip rating={qualificationRating} />
             <StatusChip status={conversation.status} />
             {isActive && (
               <button

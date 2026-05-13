@@ -1,8 +1,8 @@
 // Two side-by-side bar charts for the admin dashboard: current 7 days
-// (including today) vs previous 7. Ported from AlexZAP's
-// components/ConversationStats.tsx — same recharts BarChart layout, same
-// "Last 7 Days" / "Previous Week (7-14 days ago)" titles, same bar colors
-// (#b91c1c current / #7f1d1d previous), same percent-change badge.
+// (including today) vs previous 7. Layout, copy, and bar colors are ported
+// from AlexZAP's components/ConversationStats.tsx; card chrome is dark to
+// match the rest of the admin dashboard rather than AlexZAP's HeroUI light
+// default.
 //
 // Data comes from GET /api/admin/analytics — server-side aggregation in
 // the adminAnalytics Lambda, which fixes AlexZAP's off-by-one (today's
@@ -19,16 +19,33 @@ import {
   YAxis,
 } from "recharts";
 
+// Recharts axis/grid/tooltip palette tuned for the dark dashboard.
+const AXIS_TICK = { fill: "rgb(156 163 175)", fontSize: 12 };
+const AXIS_LINE = { stroke: "rgb(55 65 81)" };
+const GRID_STROKE = "rgb(55 65 81)";
+const TOOLTIP_STYLE = {
+  background: "rgb(17 24 39)",
+  border: "1px solid rgb(55 65 81)",
+  borderRadius: 6,
+  color: "rgb(243 244 246)",
+  fontSize: 12,
+};
+const TOOLTIP_ITEM_STYLE = { color: "rgb(243 244 246)" };
+const TOOLTIP_LABEL_STYLE = { color: "rgb(156 163 175)", marginBottom: 2 };
+const TOOLTIP_CURSOR = { fill: "rgba(220, 38, 38, 0.08)" };
+
 function Card({ children }) {
   return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden">
+    <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
       {children}
     </div>
   );
 }
 
 function CardHeader({ children }) {
-  return <div className="px-6 pt-5 pb-3 flex flex-col items-start">{children}</div>;
+  return (
+    <div className="px-6 pt-5 pb-3 flex flex-col items-start">{children}</div>
+  );
 }
 
 function CardBody({ children }) {
@@ -71,7 +88,7 @@ export default function ConversationStats() {
         {[0, 1].map((i) => (
           <div
             key={i}
-            className="bg-white rounded-xl shadow-md h-80 animate-pulse"
+            className="bg-gray-900 rounded-lg border border-gray-800 h-80 animate-pulse"
           />
         ))}
       </div>
@@ -80,21 +97,21 @@ export default function ConversationStats() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Last 7 days conversations */}
+      {/* Last 7 days */}
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-bold text-red-900">Last 7 Days</h2>
+          <h2 className="text-xl font-bold text-red-300">Last 7 Days</h2>
           <div className="flex items-center mt-2">
-            <span className="text-2xl font-bold text-gray-900">
+            <span className="text-2xl font-bold text-gray-100">
               {data.currentTotal}
             </span>
-            <span className="text-sm ml-2 text-gray-700">conversations</span>
+            <span className="text-sm ml-2 text-gray-400">conversations</span>
             {data.percentChange !== 0 && (
               <span
-                className={`ml-4 text-sm px-2 py-1 rounded ${
+                className={`ml-4 text-xs px-2 py-1 rounded font-semibold ${
                   data.percentChange > 0
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : "bg-red-500/20 text-red-300"
                 }`}
               >
                 {data.percentChange > 0 ? "+" : ""}
@@ -109,30 +126,38 @@ export default function ConversationStats() {
               data={data.current}
               margin={{ top: 10, right: 10, left: 10, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="day" />
-              <YAxis allowDecimals={false} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke={GRID_STROKE}
+              />
+              <XAxis dataKey="day" tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
+              <YAxis allowDecimals={false} tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
               <Tooltip
+                cursor={TOOLTIP_CURSOR}
+                contentStyle={TOOLTIP_STYLE}
+                itemStyle={TOOLTIP_ITEM_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
                 formatter={(value) => [`${value} conversations`, "Count"]}
                 labelFormatter={(label) => `${label}`}
               />
-              <Bar dataKey="count" fill="#b91c1c" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardBody>
       </Card>
 
-      {/* 7-14 days ago conversations */}
+      {/* 7-14 days ago */}
       <Card>
         <CardHeader>
-          <h2 className="text-xl font-bold text-red-900">
+          <h2 className="text-xl font-bold text-red-300">
             Previous Week (7-14 days ago)
           </h2>
           <div className="flex items-center mt-2">
-            <span className="text-2xl font-bold text-gray-900">
+            <span className="text-2xl font-bold text-gray-100">
               {data.previousTotal}
             </span>
-            <span className="text-sm ml-2 text-gray-700">conversations</span>
+            <span className="text-sm ml-2 text-gray-400">conversations</span>
           </div>
         </CardHeader>
         <CardBody>
@@ -141,14 +166,22 @@ export default function ConversationStats() {
               data={data.previous}
               margin={{ top: 10, right: 10, left: 10, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="day" />
-              <YAxis allowDecimals={false} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke={GRID_STROKE}
+              />
+              <XAxis dataKey="day" tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
+              <YAxis allowDecimals={false} tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
               <Tooltip
+                cursor={TOOLTIP_CURSOR}
+                contentStyle={TOOLTIP_STYLE}
+                itemStyle={TOOLTIP_ITEM_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
                 formatter={(value) => [`${value} conversations`, "Count"]}
                 labelFormatter={(label) => `${label}`}
               />
-              <Bar dataKey="count" fill="#7f1d1d" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" fill="#991b1b" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardBody>
