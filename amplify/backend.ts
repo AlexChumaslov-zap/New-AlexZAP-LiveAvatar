@@ -28,7 +28,7 @@ import { adminConversationsBulkEnd } from "./functions/adminConversationsBulkEnd
 import { adminConversationDetail } from "./functions/adminConversationDetail/resource.js";
 import { adminConversationEnd } from "./functions/adminConversationEnd/resource.js";
 import { adminConversationDelete } from "./functions/adminConversationDelete/resource.js";
-import { adminConversationPushSalesforce } from "./functions/adminConversationPushSalesforce/resource.js";
+import { adminConversationPushHubspot } from "./functions/adminConversationPushHubspot/resource.js";
 import { adminReportsGenerate } from "./functions/adminReportsGenerate/resource.js";
 import { adminAnalytics } from "./functions/adminAnalytics/resource.js";
 
@@ -46,7 +46,7 @@ const backend = defineBackend({
   adminConversationDetail,
   adminConversationEnd,
   adminConversationDelete,
-  adminConversationPushSalesforce,
+  adminConversationPushHubspot,
   adminReportsGenerate,
   adminAnalytics,
 });
@@ -98,8 +98,8 @@ const ROUTES: Array<{
   { path: "/api/admin/conversations/{id}/delete",
     methods: [HttpMethod.POST, HttpMethod.DELETE],
     fn: "adminConversationDelete", id: "AdmDeleteIntg" },
-  { path: "/api/admin/conversations/{id}/push-salesforce",
-    methods: [HttpMethod.POST], fn: "adminConversationPushSalesforce", id: "AdmPushSfIntg" },
+  { path: "/api/admin/conversations/{id}/push-hubspot",
+    methods: [HttpMethod.POST], fn: "adminConversationPushHubspot", id: "AdmPushHsIntg" },
   { path: "/api/admin/reports/generate", methods: [HttpMethod.POST], fn: "adminReportsGenerate", id: "AdmReportsIntg" },
   { path: "/api/admin/analytics",        methods: [HttpMethod.GET],  fn: "adminAnalytics",       id: "AdmAnalyticsIntg" },
 ];

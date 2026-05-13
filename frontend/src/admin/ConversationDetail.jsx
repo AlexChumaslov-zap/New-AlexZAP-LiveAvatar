@@ -421,8 +421,8 @@ export default function ConversationDetail() {
   const [generateError, setGenerateError] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [sfBusy, setSfBusy] = useState(false);
-  const [sfMessage, setSfMessage] = useState(null);
+  const [hsBusy, setHsBusy] = useState(false);
+  const [hsMessage, setHsMessage] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -488,36 +488,46 @@ export default function ConversationDetail() {
     }
   }
 
-  async function handlePushSalesforce() {
-    if (sfBusy) return;
-    if (!confirm("Push this conversation as a Lead to Salesforce?")) return;
-    setSfBusy(true);
-    setSfMessage(null);
+  async function handlePushHubspot() {
+    if (hsBusy) return;
+    if (!confirm("Push this conversation as a Contact + Deal to HubSpot?"))
+      return;
+    setHsBusy(true);
+    setHsMessage(null);
     try {
       const r = await fetch(
-        `/api/admin/conversations/${encodeURIComponent(id)}/push-salesforce`,
+        `/api/admin/conversations/${encodeURIComponent(id)}/push-hubspot`,
         { method: "POST", credentials: "same-origin" },
       );
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
-        if (r.status === 503 && body.error === "salesforce_not_configured") {
+        if (r.status === 503 && body.error === "hubspot_not_configured") {
           throw new Error(
-            "Salesforce env vars not set on this deployment.",
+            "HubSpot token not set on this deployment (HUBSPOT_PRIVATE_APP_TOKEN).",
+          );
+        }
+        if (r.status === 422 && body.error === "payload_invalid") {
+          throw new Error(
+            body.message ||
+              "Cannot push to HubSpot — visitor is missing required info (likely email).",
           );
         }
         throw new Error(body.message || body.error || `HTTP ${r.status}`);
       }
-      setSfMessage({
+      const parts = [];
+      if (body.contactId) parts.push(`contact ${body.contactId}`);
+      if (body.dealId) parts.push(`deal ${body.dealId}`);
+      setHsMessage({
         kind: "ok",
-        text: body.leadId
-          ? `Lead created in Salesforce (ID: ${body.leadId}).`
-          : "Lead created in Salesforce.",
+        text: parts.length
+          ? `Pushed to HubSpot — ${parts.join(", ")}.`
+          : "Pushed to HubSpot.",
       });
       setReloadKey((k) => k + 1);
     } catch (e) {
-      setSfMessage({ kind: "err", text: e.message || String(e) });
+      setHsMessage({ kind: "err", text: e.message || String(e) });
     } finally {
-      setSfBusy(false);
+      setHsBusy(false);
     }
   }
 
@@ -615,12 +625,12 @@ export default function ConversationDetail() {
               </button>
             )}
             <button
-              onClick={handlePushSalesforce}
-              disabled={sfBusy}
-              title="Create a Lead in Salesforce from this conversation"
+              onClick={handlePushHubspot}
+              disabled={hsBusy}
+              title="Create a Contact + Deal in HubSpot from this conversation"
               className="px-3 py-1.5 rounded-md bg-gradient-to-tr from-red-600 to-red-950 hover:shadow-lg disabled:opacity-50 text-white text-xs font-semibold transition-all"
             >
-              {sfBusy ? "Pushing…" : "Push to Salesforce"}
+              {hsBusy ? "Pushing…" : "Push to HubSpot"}
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
@@ -631,15 +641,15 @@ export default function ConversationDetail() {
           </div>
         </div>
 
-        {sfMessage && (
+        {hsMessage && (
           <div
             className={`mx-6 mb-3 px-4 py-3 rounded text-sm border ${
-              sfMessage.kind === "ok"
+              hsMessage.kind === "ok"
                 ? "bg-emerald-900/30 border-emerald-700 text-emerald-100"
                 : "bg-red-900/40 border-red-700 text-red-100"
             }`}
           >
-            {sfMessage.text}
+            {hsMessage.text}
           </div>
         )}
 

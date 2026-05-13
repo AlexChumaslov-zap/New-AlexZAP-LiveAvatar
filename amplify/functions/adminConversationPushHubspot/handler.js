@@ -1,12 +1,19 @@
-// POST /api/admin/conversations/{id}/push-salesforce.
-// Creates a Salesforce Lead, marks conversation `status: "exported"` on success.
+// POST /api/admin/conversations/{id}/push-hubspot
+//
+// Creates (or updates) a HubSpot Contact from the conversation + reports,
+// creates an associated Deal, and attaches an HTML Note summarizing the
+// conversation. On success, marks the conversation `status: "exported"`.
+//
+// Replaces the previous Salesforce push (Phase G.2). 503 when
+// HUBSPOT_PRIVATE_APP_TOKEN env var is missing, matching the same shape
+// as the OpenAI reports endpoint.
 
 import { getPrisma } from "../../../lib/prisma.js";
 import {
-  formatLeadData,
-  isSalesforceConfigured,
-  pushLeadToSalesforce,
-} from "../../../lib/salesforce-service.js";
+  formatPayload,
+  isHubspotConfigured,
+  pushLeadToHubspot,
+} from "../../../lib/hubspot-service.js";
 import { json, parseBody, method, pathParam } from "../../../lib/lambda.js";
 import { requireAdmin } from "../../../lib/adminAuth.js";
 
@@ -24,8 +31,8 @@ export const handler = async (event) => {
   if (!conversationId) {
     return json(400, { error: "missing_conversation_id" });
   }
-  if (!isSalesforceConfigured()) {
-    return json(503, { error: "salesforce_not_configured" });
+  if (!isHubspotConfigured()) {
+    return json(503, { error: "hubspot_not_configured" });
   }
 
   try {
@@ -41,8 +48,18 @@ export const handler = async (event) => {
       where: { conversationId },
     });
 
-    const leadData = formatLeadData(conversation, reports);
-    const { leadId } = await pushLeadToSalesforce(leadData);
+    let payload;
+    try {
+      payload = formatPayload(conversation, reports);
+    } catch (err) {
+      // Most likely: visitor missing email (HubSpot dedupe key).
+      return json(422, {
+        error: "payload_invalid",
+        message: String(err?.message || err),
+      });
+    }
+
+    const { contactId, dealId, noteId } = await pushLeadToHubspot(payload);
 
     await prisma.conversation.update({
       where: { id: conversationId },
@@ -51,17 +68,19 @@ export const handler = async (event) => {
 
     console.log(
       JSON.stringify({
-        event: "admin_salesforce_pushed",
+        event: "admin_hubspot_pushed",
         conversationId,
-        leadId,
+        contactId,
+        dealId,
+        noteId,
         ts: new Date().toISOString(),
       }),
     );
-    return json(200, { ok: true, leadId });
+    return json(200, { ok: true, contactId, dealId, noteId });
   } catch (err) {
-    console.error("admin-conversation-push-salesforce failed", err);
+    console.error("admin-conversation-push-hubspot failed", err);
     return json(500, {
-      error: "salesforce_push_failed",
+      error: "hubspot_push_failed",
       message: String(err?.message || err),
     });
   }
