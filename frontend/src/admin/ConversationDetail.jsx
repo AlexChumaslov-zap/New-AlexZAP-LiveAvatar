@@ -364,7 +364,7 @@ export default function ConversationDetail() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/admin/conversations/${encodeURIComponent(id)}`, {
+    fetch(`/api/admin/conversations/${encodeURIComponent(id)}/detail`, {
       credentials: "same-origin",
     })
       .then(async (r) => {

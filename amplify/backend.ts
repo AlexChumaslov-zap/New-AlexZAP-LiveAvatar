@@ -86,7 +86,12 @@ const ROUTES: Array<{
   // each handler — no API Gateway authorizer required.
   { path: "/api/admin/conversations",          methods: [HttpMethod.GET],  fn: "adminConversationsList",    id: "AdmListIntg" },
   { path: "/api/admin/conversations/bulk-end", methods: [HttpMethod.POST], fn: "adminConversationsBulkEnd", id: "AdmBulkEndIntg" },
-  { path: "/api/admin/conversations/{id}",     methods: [HttpMethod.GET],  fn: "adminConversationDetail",   id: "AdmDetailIntg" },
+  // Detail endpoint sits at /{id}/detail (not bare /{id}) to disambiguate from
+  // the list endpoint above. Without the /detail suffix, API Gateway's HTTP
+  // API v2 routing matched /api/admin/conversations (no id) to the {id}
+  // handler when Amplify Hosting's CloudFront layer appended a trailing slash,
+  // producing 400 missing_id on the list request.
+  { path: "/api/admin/conversations/{id}/detail", methods: [HttpMethod.GET], fn: "adminConversationDetail", id: "AdmDetailIntg" },
   { path: "/api/admin/conversations/{id}/end", methods: [HttpMethod.POST], fn: "adminConversationEnd",      id: "AdmConvEndIntg" },
   { path: "/api/admin/conversations/{id}/delete",
     methods: [HttpMethod.POST, HttpMethod.DELETE],
