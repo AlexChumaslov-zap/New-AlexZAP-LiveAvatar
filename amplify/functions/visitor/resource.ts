@@ -1,4 +1,5 @@
 import { defineFunction, secret } from "@aws-amplify/backend";
+import { LIBSQL_LAYER } from "../../lambda-layers.js";
 
 export const visitor = defineFunction({
   name: "visitor",
@@ -11,4 +12,5 @@ export const visitor = defineFunction({
     TURSO_AUTH_TOKEN: secret("TURSO_AUTH_TOKEN"),
     RATE_LIMIT_DISABLED: secret("RATE_LIMIT_DISABLED"),
   },
+  layers: LIBSQL_LAYER,
 });

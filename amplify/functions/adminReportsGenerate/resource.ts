@@ -1,4 +1,5 @@
 import { defineFunction, secret } from "@aws-amplify/backend";
+import { LIBSQL_LAYER } from "../../lambda-layers.js";
 
 export const adminReportsGenerate = defineFunction({
   name: "adminReportsGenerate",
@@ -16,6 +17,6 @@ export const adminReportsGenerate = defineFunction({
     OPENAI_API_KEY: secret("OPENAI_API_KEY"),
     // OPENAI_REPORT_MODEL is optional and defaults to "gpt-4o-mini". Re-add
     // as a secret only to override the model — e.g. "gpt-4o" or "gpt-4o-mini-2024-...".
-
   },
+  layers: LIBSQL_LAYER,
 });

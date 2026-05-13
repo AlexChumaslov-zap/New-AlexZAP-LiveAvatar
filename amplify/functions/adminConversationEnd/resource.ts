@@ -1,4 +1,5 @@
 import { defineFunction, secret } from "@aws-amplify/backend";
+import { LIBSQL_LAYER } from "../../lambda-layers.js";
 
 export const adminConversationEnd = defineFunction({
   name: "adminConversationEnd",
@@ -12,4 +13,5 @@ export const adminConversationEnd = defineFunction({
     ADMIN_USERNAME: secret("ADMIN_USERNAME"),
     ADMIN_PASSWORD: secret("ADMIN_PASSWORD"),
   },
+  layers: LIBSQL_LAYER,
 });

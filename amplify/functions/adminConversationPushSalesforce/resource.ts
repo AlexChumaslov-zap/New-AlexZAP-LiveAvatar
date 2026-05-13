@@ -1,4 +1,5 @@
 import { defineFunction, secret } from "@aws-amplify/backend";
+import { LIBSQL_LAYER } from "../../lambda-layers.js";
 
 export const adminConversationPushSalesforce = defineFunction({
   name: "adminConversationPushSalesforce",
@@ -19,4 +20,5 @@ export const adminConversationPushSalesforce = defineFunction({
     // Re-add as a secret only if pointing at a sandbox (https://test.salesforce.com)
     // or a My Domain URL — otherwise leave undeclared so the default kicks in.
   },
+  layers: LIBSQL_LAYER,
 });
