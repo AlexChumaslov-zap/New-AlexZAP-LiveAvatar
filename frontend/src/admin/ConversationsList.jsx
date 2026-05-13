@@ -263,10 +263,6 @@ export default function ConversationsList() {
 
   return (
     <div className="space-y-4">
-      {/* Analytics charts — only on page 1 with no filters, so the totals
-          represent the natural 14-day window without confusing context. */}
-      {page === 1 && !search && !statusCsv && <ConversationStats />}
-
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold text-red-300">Conversations</h1>
         {data && (
@@ -519,6 +515,10 @@ export default function ConversationsList() {
           </div>
         )}
       </div>
+
+      {/* Analytics charts (Phase E) — placed below the list, only on page 1
+          with no filters so the 14-day totals match the unfiltered data. */}
+      {page === 1 && !search && !statusCsv && <ConversationStats />}
     </div>
   );
 }
