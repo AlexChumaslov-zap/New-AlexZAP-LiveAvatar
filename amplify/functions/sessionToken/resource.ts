@@ -7,18 +7,24 @@ export const sessionToken = defineFunction({
   timeoutSeconds: 15,
   memoryMB: 256,
   environment: {
-    // Required
+    // Required for any avatar
     LIVEAVATAR_API_KEY: secret("LIVEAVATAR_API_KEY"),
     LIVEAVATAR_AVATAR_ID: secret("LIVEAVATAR_AVATAR_ID"),
+    // Required for custom avatars — the knowledge-base / context ID that
+    // drives the avatar's LLM responses. Without it, the avatar streams
+    // video but has nothing to say.
+    LIVEAVATAR_CONTEXT_ID: secret("LIVEAVATAR_CONTEXT_ID"),
+    // Required ONLY for image (non-video) avatars. For video avatars, set
+    // the secret to a sentinel value like "none" or "unset" — the handler
+    // currently treats any truthy value as a literal voice_id which will
+    // fail for video avatars. If your custom avatar is video, see TODO note
+    // below.
+    LIVEAVATAR_VOICE_ID: secret("LIVEAVATAR_VOICE_ID"),
     // Optional — handler has fallback to default API base; sandbox/force/rate
     // each check for specific values, so "false"/"0" is equivalent to unset.
     LIVEAVATAR_API_BASE: secret("LIVEAVATAR_API_BASE"),
     LIVEAVATAR_SANDBOX: secret("LIVEAVATAR_SANDBOX"),
     FORCE_API_DOWN: secret("FORCE_API_DOWN"),
     RATE_LIMIT_DISABLED: secret("RATE_LIMIT_DISABLED"),
-    // LIVEAVATAR_VOICE_ID and LIVEAVATAR_CONTEXT_ID are intentionally not
-    // declared here — any non-empty value gets sent to the HeyGen API as a
-    // literal ID, which breaks video-avatar sessions. To use them (for image
-    // avatars / specific contexts), re-add the line + create the secret.
   },
 });
