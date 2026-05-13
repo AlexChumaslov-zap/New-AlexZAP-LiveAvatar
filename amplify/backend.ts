@@ -30,6 +30,7 @@ import { adminConversationEnd } from "./functions/adminConversationEnd/resource.
 import { adminConversationDelete } from "./functions/adminConversationDelete/resource.js";
 import { adminConversationPushSalesforce } from "./functions/adminConversationPushSalesforce/resource.js";
 import { adminReportsGenerate } from "./functions/adminReportsGenerate/resource.js";
+import { adminAnalytics } from "./functions/adminAnalytics/resource.js";
 
 const backend = defineBackend({
   sessionToken,
@@ -47,6 +48,7 @@ const backend = defineBackend({
   adminConversationDelete,
   adminConversationPushSalesforce,
   adminReportsGenerate,
+  adminAnalytics,
 });
 
 const apiStack = backend.createStack("LiveAvatarApiStack");
@@ -99,6 +101,7 @@ const ROUTES: Array<{
   { path: "/api/admin/conversations/{id}/push-salesforce",
     methods: [HttpMethod.POST], fn: "adminConversationPushSalesforce", id: "AdmPushSfIntg" },
   { path: "/api/admin/reports/generate", methods: [HttpMethod.POST], fn: "adminReportsGenerate", id: "AdmReportsIntg" },
+  { path: "/api/admin/analytics",        methods: [HttpMethod.GET],  fn: "adminAnalytics",       id: "AdmAnalyticsIntg" },
 ];
 
 for (const r of ROUTES) {
