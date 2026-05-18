@@ -71,12 +71,12 @@ async function pushToHubspot(prisma, conversation, reports) {
   if (!isHubspotConfigured() || !conversation.visitor?.email) return;
   try {
     const payload = formatPayload(conversation, reports);
-    const { contactId, dealId, noteId } = await pushLeadToHubspot(payload);
+    const { contactId } = await pushLeadToHubspot(payload);
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: { status: "exported", updatedAt: new Date() },
     });
-    log("cron_hubspot_pushed", conversation.id, { contactId, dealId, noteId });
+    log("cron_hubspot_pushed", conversation.id, { contactId });
   } catch (err) {
     log("cron_hubspot_failed", conversation.id, { error: String(err?.message || err) });
   }

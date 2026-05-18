@@ -59,7 +59,7 @@ export const handler = async (event) => {
       });
     }
 
-    const { contactId, dealId, noteId } = await pushLeadToHubspot(payload);
+    const { contactId } = await pushLeadToHubspot(payload);
 
     await prisma.conversation.update({
       where: { id: conversationId },
@@ -71,12 +71,10 @@ export const handler = async (event) => {
         event: "admin_hubspot_pushed",
         conversationId,
         contactId,
-        dealId,
-        noteId,
         ts: new Date().toISOString(),
       }),
     );
-    return json(200, { ok: true, contactId, dealId, noteId });
+    return json(200, { ok: true, contactId });
   } catch (err) {
     console.error("admin-conversation-push-hubspot failed", err);
     return json(500, {
