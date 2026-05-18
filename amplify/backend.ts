@@ -1,5 +1,5 @@
-// Amplify Gen 2 backend — 15 Lambdas wired through an HTTP API Gateway,
-// plus a Lambda@Edge function for /admin/* Basic Auth.
+// Amplify Gen 2 backend — 16 Lambdas wired through an HTTP API Gateway,
+// plus a scheduled cron Lambda triggered every 4 h via EventBridge.
 //
 // REST routing is not a first-class Gen 2 primitive; we use the CDK escape
 // hatch (HttpApi + HttpLambdaIntegration) to build it. Each Lambda's URL is
@@ -8,12 +8,15 @@
 // to point /api/* at the HTTP API Gateway URL emitted as a stack output.
 
 import { defineBackend } from "@aws-amplify/backend";
+import { Duration } from "aws-cdk-lib";
 import {
   HttpApi,
   HttpMethod,
   CorsHttpMethod,
 } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import { Rule, Schedule } from "aws-cdk-lib/aws-events";
+import { LambdaFunction } from "aws-cdk-lib/aws-events-targets";
 
 import { sessionToken } from "./functions/sessionToken/resource.js";
 import { health } from "./functions/health/resource.js";
@@ -31,6 +34,7 @@ import { adminConversationDelete } from "./functions/adminConversationDelete/res
 import { adminConversationPushHubspot } from "./functions/adminConversationPushHubspot/resource.js";
 import { adminReportsGenerate } from "./functions/adminReportsGenerate/resource.js";
 import { adminAnalytics } from "./functions/adminAnalytics/resource.js";
+import { adminCronReports } from "./functions/adminCronReports/resource.js";
 
 const backend = defineBackend({
   sessionToken,
@@ -49,6 +53,7 @@ const backend = defineBackend({
   adminConversationPushHubspot,
   adminReportsGenerate,
   adminAnalytics,
+  adminCronReports,
 });
 
 const apiStack = backend.createStack("LiveAvatarApiStack");
@@ -121,6 +126,14 @@ backend.addOutput({
   custom: {
     httpApiUrl: httpApi.url ?? "",
   },
+});
+
+// Scheduled cron: generate reports + push to HubSpot every 4 hours.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const cronLambda = (backend.adminCronReports as any).resources.lambda;
+new Rule(apiStack, "CronReportsRule", {
+  schedule: Schedule.rate(Duration.hours(4)),
+  targets: [new LambdaFunction(cronLambda)],
 });
 
 // Note: /admin/* HTML pages are NOT protected at the edge in this version.
