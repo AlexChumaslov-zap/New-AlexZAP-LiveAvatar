@@ -68,7 +68,7 @@ async function deleteConversation(prisma, id) {
 }
 
 async function pushToHubspot(prisma, conversation, reports) {
-  if (!isHubspotConfigured() || !conversation.visitor?.email) return;
+  if (!isHubspotConfigured()) return;
   try {
     const payload = formatPayload(conversation, reports);
     const { contactId } = await pushLeadToHubspot(payload);

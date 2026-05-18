@@ -52,7 +52,6 @@ export const handler = async (event) => {
     try {
       payload = formatPayload(conversation, reports);
     } catch (err) {
-      // Most likely: visitor missing email (HubSpot dedupe key).
       return json(422, {
         error: "payload_invalid",
         message: String(err?.message || err),

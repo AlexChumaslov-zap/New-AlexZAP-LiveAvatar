@@ -65,6 +65,33 @@ export const handler = async (event) => {
         });
         return json(200, shape(v));
       } catch (err) {
+        if (err?.code === "P2002" && email) {
+          // The email is already on a different visitor. Reassign all
+          // conversations from the current anonymous visitor to the
+          // email-matched one, then remove the now-orphaned anonymous record.
+          const emailVisitor = await prisma.visitor.findUnique({
+            where: { email },
+          });
+          if (emailVisitor) {
+            await prisma.conversation.updateMany({
+              where: { visitorId: existingId },
+              data: { visitorId: emailVisitor.id },
+            });
+            // Best-effort deletion — silently skip if the row is already gone.
+            await prisma.visitor.delete({ where: { id: existingId } }).catch(
+              () => {},
+            );
+            const merged = await prisma.visitor.update({
+              where: { id: emailVisitor.id },
+              data: {
+                lastVisit: new Date(),
+                ...(name ? { name } : {}),
+                ...(company ? { company } : {}),
+              },
+            });
+            return json(200, shape(merged));
+          }
+        }
         if (err?.code !== "P2025") throw err;
       }
     }
