@@ -1,11 +1,16 @@
 // POST /api/conversation/end — mark a Conversation as ended (idempotent).
+// Also fires an async Lambda invocation to generate reports immediately,
+// so reports are ready within ~30s instead of waiting for the 4-hour cron.
 
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import {
   checkRateLimit,
   rateLimitedResponse,
 } from "../../../lib/rateLimit.js";
 import { getPrisma } from "../../../lib/prisma.js";
 import { json, parseBody, method } from "../../../lib/lambda.js";
+
+const lambdaClient = new LambdaClient({});
 
 export const handler = async (event) => {
   if (method(event) !== "POST") {
@@ -43,6 +48,30 @@ export const handler = async (event) => {
         }),
       );
     }
+
+    // Fire-and-forget: trigger report generation without blocking the response.
+    const fn = process.env.PROCESS_REPORTS_FUNCTION_NAME;
+    if (fn) {
+      lambdaClient
+        .send(
+          new InvokeCommand({
+            FunctionName: fn,
+            InvocationType: "Event",
+            Payload: Buffer.from(JSON.stringify({ conversationId })),
+          }),
+        )
+        .catch((err) => {
+          console.warn(
+            JSON.stringify({
+              event: "process_trigger_failed",
+              conversationId,
+              error: String(err?.message || err),
+              ts: new Date().toISOString(),
+            }),
+          );
+        });
+    }
+
     return json(200, {
       id: conversation.id,
       status: conversation.status,

@@ -35,6 +35,7 @@ import { adminConversationPushHubspot } from "./functions/adminConversationPushH
 import { adminReportsGenerate } from "./functions/adminReportsGenerate/resource.js";
 import { adminAnalytics } from "./functions/adminAnalytics/resource.js";
 import { adminCronReports } from "./functions/adminCronReports/resource.js";
+import { processConversationReports } from "./functions/processConversationReports/resource.js";
 
 const backend = defineBackend({
   sessionToken,
@@ -54,6 +55,7 @@ const backend = defineBackend({
   adminReportsGenerate,
   adminAnalytics,
   adminCronReports,
+  processConversationReports,
 });
 
 const apiStack = backend.createStack("LiveAvatarApiStack");
@@ -135,6 +137,15 @@ new Rule(apiStack, "CronReportsRule", {
   schedule: Schedule.rate(Duration.hours(4)),
   targets: [new LambdaFunction(cronLambda)],
 });
+
+// On-session-end report trigger: conversationEnd fires processConversationReports
+// asynchronously (InvocationType: Event) so the HTTP response is not delayed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const processReportsLambda = (backend.processConversationReports as any).resources.lambda;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const convEndLambda = (backend.conversationEnd as any).resources.lambda;
+processReportsLambda.grantInvoke(convEndLambda);
+convEndLambda.addEnvironment("PROCESS_REPORTS_FUNCTION_NAME", processReportsLambda.functionName);
 
 // Note: /admin/* HTML pages are NOT protected at the edge in this version.
 // The /api/admin/* data behind them IS protected (inline Basic Auth via
