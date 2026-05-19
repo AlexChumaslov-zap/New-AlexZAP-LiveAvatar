@@ -4,9 +4,41 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LiveAvatar Sandbox Test</title>
+
+    <!-- LinkedIn Insight Tag — loads only when VITE_LINKEDIN_PARTNER_ID is set. -->
+    <script>
+      (function () {
+        var pid = "%VITE_LINKEDIN_PARTNER_ID%";
+        if (!pid) return;
+        window._linkedin_partner_id = pid;
+        window._linkedin_data_partner_ids =
+          window._linkedin_data_partner_ids || [];
+        window._linkedin_data_partner_ids.push(pid);
+        window.lintrk =
+          window.lintrk ||
+          function (a, b) {
+            window.lintrk.q = window.lintrk.q || [];
+            window.lintrk.q.push([a, b]);
+          };
+        var s = document.createElement("script");
+        s.type = "text/javascript";
+        s.async = true;
+        s.src = "https://snap.licdn.com/li.lms-analytics/insight.min.js";
+        document.head.appendChild(s);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- LinkedIn Insight Tag noscript fallback (body required by HTML5 spec) -->
+    <noscript
+      ><img
+        height="1"
+        width="1"
+        style="display: none"
+        alt=""
+        src="https://px.ads.linkedin.com/collect/?pid=%VITE_LINKEDIN_PARTNER_ID%&fmt=gif"
+    /></noscript>
   </body>
 </html>

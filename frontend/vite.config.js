@@ -7,6 +7,8 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  // Load .env from the repo root so frontend and backend share one file.
+  envDir: "..",
   server: { port: 5173 },
   build: {
     rollupOptions: {
