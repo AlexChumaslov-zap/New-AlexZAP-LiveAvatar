@@ -5,7 +5,7 @@
 //   2. Call OpenAI to generate report.
 //   3. JunkAssessment.IsJunk === true → delete.
 //   4. Save report rows to DB, update visitor name/company.
-//   5. Visitor has an email → push Contact + Deal + Note to HubSpot.
+//   5. Push Contact + transcript Note to HubSpot.
 //
 // Additionally, any conversation that already has reports but hasn't been
 // exported yet is pushed to HubSpot (no new AI call needed).
@@ -67,16 +67,16 @@ async function deleteConversation(prisma, id) {
   ]);
 }
 
-async function pushToHubspot(prisma, conversation, reports) {
+async function pushToHubspot(prisma, conversation, reports, messages = []) {
   if (!isHubspotConfigured()) return;
   try {
-    const payload = formatPayload(conversation, reports);
-    const { contactId } = await pushLeadToHubspot(payload);
+    const payload = formatPayload(conversation, reports, messages);
+    const { contactId, noteId } = await pushLeadToHubspot(payload);
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: { status: "exported", updatedAt: new Date() },
     });
-    log("cron_hubspot_pushed", conversation.id, { contactId });
+    log("cron_hubspot_pushed", conversation.id, { contactId, noteId });
   } catch (err) {
     log("cron_hubspot_failed", conversation.id, { error: String(err?.message || err) });
   }
@@ -156,16 +156,16 @@ export const handler = async () => {
 
     log("cron_report_saved", id);
 
-    // Push to HubSpot if we have an email.
     const freshReports = await prisma.report.findMany({
       where: { conversationId: id },
     });
-    // Reload conversation to pick up any visitor updates we just applied.
+    // Reload visitor to pick up any name/company updates applied above.
+    // Messages are already loaded from the initial query — reuse them.
     const freshConversation = await prisma.conversation.findUnique({
       where: { id },
       include: { visitor: true },
     });
-    await pushToHubspot(prisma, freshConversation, freshReports);
+    await pushToHubspot(prisma, freshConversation, freshReports, messages);
   }
 
   // ── Step 2: already-reported conversations not yet in HubSpot ───────────
@@ -174,7 +174,10 @@ export const handler = async () => {
       reports: { some: {} },
       status: { not: "exported" },
     },
-    include: { visitor: true },
+    include: {
+      visitor: true,
+      messages: { orderBy: { timestamp: "asc" } },
+    },
     take: BATCH_SIZE,
   });
 
@@ -182,7 +185,7 @@ export const handler = async () => {
     const reports = await prisma.report.findMany({
       where: { conversationId: conversation.id },
     });
-    await pushToHubspot(prisma, conversation, reports);
+    await pushToHubspot(prisma, conversation, reports, conversation.messages);
   }
 
   log("cron_completed", null, {

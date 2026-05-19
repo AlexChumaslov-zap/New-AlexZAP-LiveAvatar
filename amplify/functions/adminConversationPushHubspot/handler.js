@@ -39,7 +39,10 @@ export const handler = async (event) => {
     const prisma = getPrisma();
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: { visitor: true },
+      include: {
+        visitor: true,
+        messages: { orderBy: { timestamp: "asc" } },
+      },
     });
     if (!conversation) {
       return json(404, { error: "conversation_not_found" });
@@ -50,7 +53,7 @@ export const handler = async (event) => {
 
     let payload;
     try {
-      payload = formatPayload(conversation, reports);
+      payload = formatPayload(conversation, reports, conversation.messages);
     } catch (err) {
       return json(422, {
         error: "payload_invalid",
@@ -58,7 +61,7 @@ export const handler = async (event) => {
       });
     }
 
-    const { contactId } = await pushLeadToHubspot(payload);
+    const { contactId, noteId } = await pushLeadToHubspot(payload);
 
     await prisma.conversation.update({
       where: { id: conversationId },
@@ -70,10 +73,11 @@ export const handler = async (event) => {
         event: "admin_hubspot_pushed",
         conversationId,
         contactId,
+        noteId,
         ts: new Date().toISOString(),
       }),
     );
-    return json(200, { ok: true, contactId });
+    return json(200, { ok: true, contactId, noteId });
   } catch (err) {
     console.error("admin-conversation-push-hubspot failed", err);
     return json(500, {
