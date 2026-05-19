@@ -8,6 +8,8 @@ import {
   VoiceChatEvent,
   VoiceChatState,
 } from "@heygen/liveavatar-web-sdk";
+import FloatingVideoPlayer from "./FloatingVideoPlayer.jsx";
+import { extractYouTubeId, findVideoForMessage } from "./lib/videoSearch.js";
 
 const KEEP_ALIVE_MS = 2 * 60 * 1000;
 const CONNECT_TIMEOUT_MS = 22 * 1000;
@@ -95,6 +97,7 @@ export default function App() {
   const transcriptScrollRef = useRef(null);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
+  const [floatingVideoId, setFloatingVideoId] = useState(null);
 
   // Visitor identity (Land 3a). Persisted in localStorage so returning visitors
   // are recognized. Land 3c will sync this to Postgres.
@@ -827,6 +830,8 @@ export default function App() {
     session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION, (e) => {
       addTranscriptMessage("avatar", e.text);
       persistMessage("avatar", e.text);
+      const vid = extractYouTubeId(e.text) || findVideoForMessage(e.text);
+      if (vid) setFloatingVideoId(vid);
     });
 
     session.voiceChat.on(VoiceChatEvent.STATE_CHANGED, (s) => {
@@ -1271,6 +1276,13 @@ export default function App() {
             </p>
           )}
         </div>
+      )}
+
+      {floatingVideoId && (
+        <FloatingVideoPlayer
+          videoId={floatingVideoId}
+          onClose={() => setFloatingVideoId(null)}
+        />
       )}
 
       {renderVisitorModal()}
