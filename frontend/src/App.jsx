@@ -681,6 +681,27 @@ export default function App() {
     };
   }, []);
 
+  // LinkedIn Insight Tag — injected via JS so Vite's HTML parser never sees
+  // the env token, avoiding the "URI malformed" build error.
+  useEffect(() => {
+    const pid = import.meta.env.VITE_LINKEDIN_PARTNER_ID;
+    if (!pid) return;
+    window._linkedin_partner_id = pid;
+    window._linkedin_data_partner_ids = window._linkedin_data_partner_ids || [];
+    window._linkedin_data_partner_ids.push(pid);
+    window.lintrk =
+      window.lintrk ||
+      function (a, b) {
+        window.lintrk.q = window.lintrk.q || [];
+        window.lintrk.q.push([a, b]);
+      };
+    const s = document.createElement("script");
+    s.type = "text/javascript";
+    s.async = true;
+    s.src = "https://snap.licdn.com/li.lms-analytics/insight.min.js";
+    document.head.appendChild(s);
+  }, []);
+
   // URL flag: ?forceFallback=1 → go straight to fallback iframe on page load (no Talk click needed)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
