@@ -858,16 +858,20 @@ export default function App() {
       setAvatarTalking(false),
     );
     session.on(AgentEventsEnum.USER_SPEAK_STARTED, () => {
-      // If a previous utterance is still in the 3-second silence buffer, flush
-      // it now so it doesn't get lost when the new utterance begins.
-      flushPendingTranscript();
       setUserTalking(true);
       resetIdleTimer();
+      // User is still talking — cancel the silence countdown so the buffered
+      // text is NOT shown yet.  The next USER_TRANSCRIPTION will append to
+      // whatever is already in the buffer, keeping everything as one message.
+      if (pendingTranscriptRef.current.timer) {
+        clearTimeout(pendingTranscriptRef.current.timer);
+        pendingTranscriptRef.current.timer = null;
+      }
     });
     session.on(AgentEventsEnum.USER_SPEAK_ENDED, () => {
       setUserTalking(false);
-      // Give the user 3 seconds of confirmed silence before their words appear
-      // in the chat. flushPendingTranscript() will commit the buffered text.
+      // Start (or restart) the 3-second silence window.  Only after 3 full
+      // seconds of uninterrupted silence will the accumulated text appear.
       if (pendingTranscriptRef.current.timer) {
         clearTimeout(pendingTranscriptRef.current.timer);
       }
@@ -888,11 +892,14 @@ export default function App() {
         pendingTypedMessageRef.current = null;
         return;
       }
-      // Store the transcribed text.  It will be displayed once the 3-second
-      // silence timer (started in USER_SPEAK_ENDED) fires.  If USER_SPEAK_ENDED
-      // never fires (edge case), fall back to a standalone 4-second timer so
-      // the message is never silently dropped.
-      pendingTranscriptRef.current.text = e.text;
+      // Accumulate: if the user paused mid-sentence the SDK emits one
+      // USER_TRANSCRIPTION per pause-delimited segment.  Append each segment
+      // so the whole utterance ends up as a single chat message once the
+      // 3-second silence window expires.
+      const prev = pendingTranscriptRef.current.text;
+      pendingTranscriptRef.current.text = prev ? `${prev} ${e.text}` : e.text;
+      // Safety net: if USER_SPEAK_ENDED never fired (edge case) arm a
+      // standalone 4-second timer so the message is never silently dropped.
       if (!pendingTranscriptRef.current.timer) {
         pendingTranscriptRef.current.timer = setTimeout(
           flushPendingTranscript,
