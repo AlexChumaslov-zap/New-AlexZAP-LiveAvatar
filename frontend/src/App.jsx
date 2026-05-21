@@ -97,6 +97,12 @@ export default function App() {
   const transcriptScrollRef = useRef(null);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
+  // Guards against the SDK echoing a typed send as a USER_TRANSCRIPTION event,
+  // which would cause the message to appear twice in the chat.
+  const pendingTypedMessageRef = useRef(null);
+  // Buffers voice transcriptions for 3 s of silence before showing them,
+  // giving the user time to finish their thought.
+  const pendingTranscriptRef = useRef({ text: null, timer: null });
   const [floatingVideoId, setFloatingVideoId] = useState(null);
 
   // Visitor identity (Land 3a). Persisted in localStorage so returning visitors
@@ -229,6 +235,21 @@ export default function App() {
 
   function clearTranscript() {
     setTranscript([]);
+  }
+
+  // Commit any buffered voice transcript to the visible chat and cancel its
+  // pending timer.  Called either when the 3-second silence window expires or
+  // when the user starts speaking again (so the previous utterance isn't lost).
+  function flushPendingTranscript() {
+    if (pendingTranscriptRef.current.timer) {
+      clearTimeout(pendingTranscriptRef.current.timer);
+      pendingTranscriptRef.current.timer = null;
+    }
+    if (pendingTranscriptRef.current.text) {
+      addTranscriptMessage("user", pendingTranscriptRef.current.text);
+      persistMessage("user", pendingTranscriptRef.current.text);
+      pendingTranscriptRef.current.text = null;
+    }
   }
 
   // Persistence helpers (Phase 2). All best-effort: server-side persistence
@@ -644,6 +665,8 @@ export default function App() {
       clearSessionTimers();
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       if (formCloseTimerRef.current) clearTimeout(formCloseTimerRef.current);
+      if (pendingTranscriptRef.current.timer)
+        clearTimeout(pendingTranscriptRef.current.timer);
       sessionRef.current?.stop().catch(() => {});
     };
   }, []);
@@ -835,18 +858,47 @@ export default function App() {
       setAvatarTalking(false),
     );
     session.on(AgentEventsEnum.USER_SPEAK_STARTED, () => {
+      // If a previous utterance is still in the 3-second silence buffer, flush
+      // it now so it doesn't get lost when the new utterance begins.
+      flushPendingTranscript();
       setUserTalking(true);
       resetIdleTimer();
     });
-    session.on(AgentEventsEnum.USER_SPEAK_ENDED, () => setUserTalking(false));
+    session.on(AgentEventsEnum.USER_SPEAK_ENDED, () => {
+      setUserTalking(false);
+      // Give the user 3 seconds of confirmed silence before their words appear
+      // in the chat. flushPendingTranscript() will commit the buffered text.
+      if (pendingTranscriptRef.current.timer) {
+        clearTimeout(pendingTranscriptRef.current.timer);
+      }
+      pendingTranscriptRef.current.timer = setTimeout(
+        flushPendingTranscript,
+        3000,
+      );
+    });
 
     // We deliberately do NOT subscribe to *_TRANSCRIPTION_CHUNK events.
     // Streaming partial words appear before the speaker finishes their thought,
     // which reads as noise. The full *_TRANSCRIPTION events fire when the
     // utterance ends, which is the only moment we want to show the message.
     session.on(AgentEventsEnum.USER_TRANSCRIPTION, (e) => {
-      addTranscriptMessage("user", e.text);
-      persistMessage("user", e.text);
+      // If this text matches the most-recently typed message it means the SDK
+      // is echoing the send — skip it to avoid showing the message twice.
+      if (pendingTypedMessageRef.current === e.text) {
+        pendingTypedMessageRef.current = null;
+        return;
+      }
+      // Store the transcribed text.  It will be displayed once the 3-second
+      // silence timer (started in USER_SPEAK_ENDED) fires.  If USER_SPEAK_ENDED
+      // never fires (edge case), fall back to a standalone 4-second timer so
+      // the message is never silently dropped.
+      pendingTranscriptRef.current.text = e.text;
+      if (!pendingTranscriptRef.current.timer) {
+        pendingTranscriptRef.current.timer = setTimeout(
+          flushPendingTranscript,
+          4000,
+        );
+      }
     });
     session.on(AgentEventsEnum.AVATAR_TRANSCRIPTION, (e) => {
       addTranscriptMessage("avatar", e.text);
@@ -866,10 +918,13 @@ export default function App() {
     const text = textToSay.trim();
     if (!text || !sessionRef.current) return;
     try {
-      // Typed input doesn't emit USER_TRANSCRIPTION, so add it to the transcript
-      // and persist it directly.
+      // Add to the transcript immediately and persist — typed messages don't
+      // go through the voice pipeline so we own the full lifecycle here.
       addTranscriptMessage("user", text);
       persistMessage("user", text);
+      // Some SDK versions fire USER_TRANSCRIPTION for typed sends.  Guard
+      // against that so the message doesn't appear twice in the chat.
+      pendingTypedMessageRef.current = text;
       await sessionRef.current.message(text);
       setTextToSay("");
       resetIdleTimer();
